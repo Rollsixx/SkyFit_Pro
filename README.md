@@ -2,7 +2,7 @@
 
 **Repo:** (https://github.com/iloysalvador948-coder/Cipher_Task1)
 
-**APK:** [PASTE_APK_LINK_OR_LOCATION_HERE]
+**APK:** (https://github.com/iloysalvador948-coder/Cipher_Task1/releases/download/v1.0.0/app-release.apk)
 
 CipherTask is a local-first secure To-Do app demonstrating:
 - **Encrypted database at rest** (Hive + `HiveAesCipher`)
