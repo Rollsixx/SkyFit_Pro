@@ -1,7 +1,8 @@
 # CipherTask – Secure Encrypted To-Do System (Flutter, Strict MVVM)
 
-**Repo:** [PASTE_PUBLIC_GITHUB_URL_HERE]  
-**APK:** [PASTE_APK_LINK_OR_LOCATION_HERE]
+**Repo:** (https://github.com/iloysalvador948-coder/Cipher_Task1)
+
+**APK:** (https://github.com/iloysalvador948-coder/Cipher_Task1/releases/download/v1.0.0/app-release.apk)
 
 CipherTask is a local-first secure To-Do app demonstrating:
 - **Encrypted database at rest** (Hive + `HiveAesCipher`)
