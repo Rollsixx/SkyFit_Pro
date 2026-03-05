@@ -19,6 +19,15 @@ class _LoginViewState extends State<LoginView> {
   bool _obscure = true;
 
   @override
+  void initState() {
+    super.initState();
+    // ✅ Check biometric availability after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AuthViewModel>().checkBiometricsAvailability();
+    });
+  }
+
+  @override
   void dispose() {
     _email.dispose();
     _password.dispose();
@@ -53,7 +62,9 @@ class _LoginViewState extends State<LoginView> {
   Future<void> _bioUnlock() async {
     final auth = context.read<AuthViewModel>();
     auth.clearError();
+
     final ok = await auth.unlockWithBiometrics();
+
     if (!mounted) return;
     if (ok) {
       Navigator.of(context).pushReplacement(
@@ -67,6 +78,8 @@ class _LoginViewState extends State<LoginView> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthViewModel>();
+
+    final bioEnabled = auth.biometricsChecked && auth.biometricsAvailable;
 
     return Scaffold(
       backgroundColor: Constants.dsBlack,
@@ -111,7 +124,7 @@ class _LoginViewState extends State<LoginView> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Demon Slayer Mode • Secure To-Do',
+                    'To-Do App',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Colors.white70,
@@ -126,13 +139,17 @@ class _LoginViewState extends State<LoginView> {
                     decoration: InputDecoration(
                       labelText: 'Email',
                       labelStyle: const TextStyle(color: Colors.white70),
-                      prefixIcon: const Icon(Icons.alternate_email, color: Colors.white70),
+                      prefixIcon:
+                          const Icon(Icons.alternate_email, color: Colors.white70),
                       filled: true,
                       fillColor: Colors.white.withOpacity(0.06),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
+
                   TextField(
                     controller: _password,
                     obscureText: _obscure,
@@ -142,12 +159,17 @@ class _LoginViewState extends State<LoginView> {
                       labelStyle: const TextStyle(color: Colors.white70),
                       prefixIcon: const Icon(Icons.lock, color: Colors.white70),
                       suffixIcon: IconButton(
-                        icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off, color: Colors.white70),
+                        icon: Icon(
+                          _obscure ? Icons.visibility : Icons.visibility_off,
+                          color: Colors.white70,
+                        ),
                         onPressed: () => setState(() => _obscure = !_obscure),
                       ),
                       filled: true,
                       fillColor: Colors.white.withOpacity(0.06),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -158,25 +180,44 @@ class _LoginViewState extends State<LoginView> {
                       backgroundColor: Constants.dsCrimson,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                     child: auth.isBusy
-                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Text('Login'),
                   ),
                   const SizedBox(height: 10),
 
                   OutlinedButton.icon(
-                    onPressed: auth.isBusy ? null : _bioUnlock,
+                    onPressed: (auth.isBusy || !bioEnabled) ? null : _bioUnlock,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
                       side: BorderSide(color: Constants.dsTeal.withOpacity(0.7)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                     icon: const Icon(Icons.fingerprint),
-                    label: const Text('Unlock with Fingerprint'),
+                    label: Text(
+                      bioEnabled ? 'Unlock with Fingerprint' : 'Fingerprint not available',
+                    ),
                   ),
+
+                  if (auth.biometricsChecked && !auth.biometricsAvailable) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Tip: Enroll fingerprint + enable screen lock (PIN/Pattern).',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                  ],
 
                   const SizedBox(height: 14),
                   TextButton(
@@ -184,7 +225,9 @@ class _LoginViewState extends State<LoginView> {
                         ? null
                         : () {
                             Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const RegisterView()),
+                              MaterialPageRoute(
+                                builder: (_) => const RegisterView(),
+                              ),
                             );
                           },
                     child: const Text('Create account (OTP simulation)'),

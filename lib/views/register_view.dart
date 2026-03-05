@@ -14,15 +14,18 @@ class RegisterView extends StatefulWidget {
 class _RegisterViewState extends State<RegisterView> {
   final _email = TextEditingController();
   final _pass = TextEditingController();
+  final _confirmPass = TextEditingController();
   final _otp = TextEditingController();
 
   bool _otpStage = false;
   bool _obscure = true;
+  bool _obscureConfirm = true;
 
   @override
   void dispose() {
     _email.dispose();
     _pass.dispose();
+    _confirmPass.dispose();
     _otp.dispose();
     super.dispose();
   }
@@ -35,9 +38,16 @@ class _RegisterViewState extends State<RegisterView> {
     final auth = context.read<AuthViewModel>();
     auth.clearError();
 
+    // UI convenience check
+    if (_pass.text != _confirmPass.text) {
+      _snack('Passwords do not match.');
+      return;
+    }
+
     final ok = await auth.beginRegistration(
       email: _email.text,
       password: _pass.text,
+      confirmPassword: _confirmPass.text,
     );
 
     if (!mounted) return;
@@ -46,7 +56,6 @@ class _RegisterViewState extends State<RegisterView> {
       return;
     }
 
-    // OTP simulation: show the generated OTP
     setState(() => _otpStage = true);
 
     final otp = auth.otpForSimulation ?? '------';
@@ -117,6 +126,7 @@ class _RegisterViewState extends State<RegisterView> {
                         ),
                   ),
                   const SizedBox(height: 10),
+
                   TextField(
                     controller: _email,
                     enabled: !auth.isBusy && !_otpStage,
@@ -130,6 +140,7 @@ class _RegisterViewState extends State<RegisterView> {
                     ),
                   ),
                   const SizedBox(height: 10),
+
                   TextField(
                     controller: _pass,
                     enabled: !auth.isBusy && !_otpStage,
@@ -147,8 +158,29 @@ class _RegisterViewState extends State<RegisterView> {
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                   ),
+                  const SizedBox(height: 10),
+
+                  // ✅ Confirm Password
+                  TextField(
+                    controller: _confirmPass,
+                    enabled: !auth.isBusy && !_otpStage,
+                    obscureText: _obscureConfirm,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Retype Password',
+                      labelStyle: const TextStyle(color: Colors.white70),
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscureConfirm ? Icons.visibility : Icons.visibility_off, color: Colors.white70),
+                        onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.06),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
 
                   const SizedBox(height: 12),
+
                   if (_otpStage) ...[
                     TextField(
                       controller: _otp,
@@ -184,9 +216,9 @@ class _RegisterViewState extends State<RegisterView> {
                   ),
 
                   const SizedBox(height: 10),
-                  Text(
+                  const Text(
                     'Note: OTP is a simulation for lab demonstration only.',
-                    style: const TextStyle(color: Colors.white54),
+                    style: TextStyle(color: Colors.white54),
                   ),
                 ],
               ),

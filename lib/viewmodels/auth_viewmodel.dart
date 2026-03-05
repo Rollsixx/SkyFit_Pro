@@ -19,7 +19,12 @@ class AuthViewModel extends ChangeNotifier {
   UserModel? _currentUser;
   bool _busy = false;
   String? _error;
-  String? _otpForSimulation; // only for simulated registration OTP
+  String? _otpForSimulation;
+
+  // ✅ Biometrics availability state (device-level)
+  bool _biometricsChecked = false;
+  bool _biometricsAvailable = false;
+  String? _biometricInfo;
 
   AuthViewModel(this._db, this._keys, this._session);
 
@@ -29,13 +34,35 @@ class AuthViewModel extends ChangeNotifier {
   bool get isLoggedIn => _currentUser != null && !_session.isLocked;
   String? get otpForSimulation => _otpForSimulation;
 
+  bool get biometricsChecked => _biometricsChecked;
+  bool get biometricsAvailable => _biometricsAvailable;
+  String? get biometricInfo => _biometricInfo;
+
   void clearError() {
     _error = null;
     notifyListeners();
   }
 
-  // -------------------- Password Hashing (PBKDF2) --------------------
+  // ✅ Call this once on Login page to determine if prompt can even show
+  Future<void> checkBiometricsAvailability() async {
+    try {
+      final supported = await _localAuth.isDeviceSupported();
+      final canCheck = await _localAuth.canCheckBiometrics;
+      final available = await _localAuth.getAvailableBiometrics();
 
+      _biometricsAvailable = supported && canCheck && available.isNotEmpty;
+      _biometricInfo = 'supported=$supported canCheck=$canCheck available=$available';
+      _biometricsChecked = true;
+      notifyListeners();
+    } catch (e) {
+      _biometricsAvailable = false;
+      _biometricInfo = 'error=$e';
+      _biometricsChecked = true;
+      notifyListeners();
+    }
+  }
+
+  // -------------------- PBKDF2 --------------------
   List<int> _pbkdf2Hash({
     required String password,
     required List<int> salt,
@@ -56,42 +83,46 @@ class AuthViewModel extends ChangeNotifier {
     return diff == 0;
   }
 
-  // -------------------- Register (with OTP simulation) --------------------
-
+  // -------------------- Register --------------------
   String _generateOtp6() {
     final rnd = Random.secure();
     return (100000 + rnd.nextInt(900000)).toString();
   }
 
   Future<bool> beginRegistration({
-    required String email,
-    required String password,
-  }) async {
-    _setBusy(true);
-    try {
-      final normalized = email.toLowerCase().trim();
-      if (normalized.isEmpty || !normalized.contains('@')) {
-        _error = 'Please enter a valid email.';
-        return false;
-      }
-      if (password.length < 8) {
-        _error = 'Password must be at least 8 characters.';
-        return false;
-      }
-      final exists = await _db.userExists(normalized);
-      if (exists) {
-        _error = 'User already exists.';
-        return false;
-      }
-
-      // OTP Simulation: show code in UI; user must type it to confirm.
-      _otpForSimulation = _generateOtp6();
-      _error = null;
-      return true;
-    } finally {
-      _setBusy(false);
+  required String email,
+  required String password,
+  required String confirmPassword,
+}) async {
+  _setBusy(true);
+  try {
+    final normalized = email.toLowerCase().trim();
+    if (normalized.isEmpty || !normalized.contains('@')) {
+      _error = 'Please enter a valid email.';
+      return false;
     }
+    if (password.length < 8) {
+      _error = 'Password must be at least 8 characters.';
+      return false;
+    }
+    if (password != confirmPassword) {
+      _error = 'Passwords do not match.';
+      return false;
+    }
+
+    final exists = await _db.userExists(normalized);
+    if (exists) {
+      _error = 'User already exists.';
+      return false;
+    }
+
+    _otpForSimulation = _generateOtp6();
+    _error = null;
+    return true;
+  } finally {
+    _setBusy(false);
   }
+}
 
   Future<bool> confirmRegistrationOtpAndCreateUser({
     required String email,
@@ -126,7 +157,7 @@ class AuthViewModel extends ChangeNotifier {
       _otpForSimulation = null;
       _error = null;
       return true;
-    } catch (e) {
+    } catch (_) {
       _error = 'Registration failed.';
       return false;
     } finally {
@@ -135,7 +166,6 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   // -------------------- Login --------------------
-
   Future<bool> loginWithPassword({
     required String email,
     required String password,
@@ -155,7 +185,6 @@ class AuthViewModel extends ChangeNotifier {
         return false;
       }
 
-      // Mark first successful password login requirement for biometrics.
       if (!user.hasLoggedInOnce) {
         user.hasLoggedInOnce = true;
         await _db.updateUser(user);
@@ -179,9 +208,15 @@ class AuthViewModel extends ChangeNotifier {
   Future<bool> unlockWithBiometrics() async {
     _setBusy(true);
     try {
+      // Device-level check first
+      if (!_biometricsAvailable) {
+        _error = 'Biometrics not available. Enroll fingerprint + enable screen lock.';
+        return false;
+      }
+
       final lastEmail = await _keys.readLastEmail();
       if (lastEmail == null) {
-        _error = 'No previous login found. Please login with password first.';
+        _error = 'No previous login found. Login with password first.';
         return false;
       }
 
@@ -196,14 +231,7 @@ class AuthViewModel extends ChangeNotifier {
         return false;
       }
       if (!user.biometricsEnabled) {
-        _error = 'Biometric unlock is not enabled in your profile.';
-        return false;
-      }
-
-      final canCheck = await _localAuth.canCheckBiometrics;
-      final isSupported = await _localAuth.isDeviceSupported();
-      if (!canCheck || !isSupported) {
-        _error = 'Biometrics not available on this device.';
+        _error = 'Enable biometric unlock from the To-Do screen switch first.';
         return false;
       }
 
@@ -237,7 +265,6 @@ class AuthViewModel extends ChangeNotifier {
     final user = _currentUser;
     if (user == null) return;
 
-    // Enforce rule: only after password login at least once
     if (!user.hasLoggedInOnce && enabled) {
       _error = 'Login with password at least once before enabling biometrics.';
       notifyListeners();
@@ -259,7 +286,6 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   void onSessionTimedOut() {
-    // Called by SessionService when timer hits.
     logout();
   }
 

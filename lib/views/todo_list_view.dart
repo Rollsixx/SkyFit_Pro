@@ -159,13 +159,35 @@ class _TodoListViewState extends State<TodoListView> {
   }
 
   Future<void> _logout() async {
-    await context.read<AuthViewModel>().logout();
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginView()),
-      (_) => false,
-    );
-  }
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Log out?'),
+      content: const Text('Are you sure you want to log out of CipherTask?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+          child: const Text('Log out'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirm != true) return;
+
+  await context.read<AuthViewModel>().logout();
+  if (!mounted) return;
+
+  Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => const LoginView()),
+    (_) => false,
+  );
+}
 
   Widget _todoTile(TodoModel todo, String note) {
     return Container(
