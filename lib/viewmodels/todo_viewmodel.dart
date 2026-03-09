@@ -5,49 +5,44 @@ import '../services/database_service.dart';
 import '../services/encryption_service.dart';
 
 class TodoViewModel extends ChangeNotifier {
-  final DatabaseService _db;
+  final DatabaseService  _db;
   final EncryptionService _crypto;
 
-  bool _busy = false;
+  bool    _busy  = false;
   String? _error;
 
   List<TodoModel> _todos = [];
   List<TodoModel> get todos => _todos;
 
-  bool get isBusy => _busy;
-  String? get error => _error;
+  bool    get isBusy => _busy;
+  String? get error  => _error;
 
   static const List<String> priorities = ['Low', 'Medium', 'High'];
 
   TodoViewModel(this._db, this._crypto);
 
-  void clearError() {
-    _error = null;
-    notifyListeners();
-  }
+  void clearError() { _error = null; notifyListeners(); }
+
+  // ── Read ──────────────────────────────────────────────────────────────────
 
   void loadTodos(String ownerEmail) {
     _todos = _db.getTodosForOwner(ownerEmail);
     notifyListeners();
   }
 
-  String decryptNoteForUi(TodoModel todo) {
-    return _crypto.decryptSensitiveNote(todo.encryptedNote);
-  }
+  String decryptNoteForUi(TodoModel todo) =>
+      _crypto.decryptSensitiveNote(todo.encryptedNote);
 
-  int get totalCount => _todos.length;
+  // ── Stats ─────────────────────────────────────────────────────────────────
 
-  int get completedCount => _todos.where((t) => t.completed).length;
-
-  int get pendingCount => _todos.where((t) => !t.completed).length;
-
+  int get totalCount     => _todos.length;
+  int get completedCount => _todos.where((t) =>  t.completed).length;
+  int get pendingCount   => _todos.where((t) => !t.completed).length;
   int get overdueCount {
     final now = DateTime.now();
-    return _todos.where((t) {
-      return !t.completed &&
-          t.dueDate != null &&
-          t.dueDate!.isBefore(now);
-    }).length;
+    return _todos.where((t) =>
+      !t.completed && t.dueDate != null && t.dueDate!.isBefore(now),
+    ).length;
   }
 
   bool isOverdue(TodoModel todo) {
@@ -55,100 +50,92 @@ class TodoViewModel extends ChangeNotifier {
     return todo.dueDate!.isBefore(DateTime.now());
   }
 
+  // ── Create ────────────────────────────────────────────────────────────────
+
   Future<bool> addTodo({
-    required String ownerEmail,
-    required String title,
-    required String notePlaintext,
-    DateTime? dueDate,
-    required String priority,
+    required String   ownerEmail,
+    required String   title,
+    required String   notePlaintext,
+    DateTime?         dueDate,
+    required String   priority,
   }) async {
     _setBusy(true);
     try {
-      if (title.trim().isEmpty) {
-        _error = 'Title is required.';
-        return false;
-      }
+      if (title.trim().isEmpty) { _error = 'Title is required.'; return false; }
+      if (!priorities.contains(priority)) { _error = 'Invalid priority.'; return false; }
 
-      if (!priorities.contains(priority)) {
-        _error = 'Invalid priority.';
-        return false;
-      }
-
-      final now = DateTime.now();
+      final now       = DateTime.now();
       final encrypted = _crypto.encryptSensitiveNote(notePlaintext);
 
       final todo = TodoModel(
-        id: _db.newId(),
-        ownerEmail: ownerEmail.toLowerCase().trim(),
-        title: title.trim(),
+        id:            _db.newId(),
+        ownerEmail:    ownerEmail.toLowerCase().trim(),
+        title:         title.trim(),
         encryptedNote: encrypted,
-        completed: false,
-        createdAt: now,
-        updatedAt: now,
-        dueDate: dueDate,
-        priority: priority,
+        completed:     false,
+        createdAt:     now,
+        updatedAt:     now,
+        dueDate:       dueDate,
+        priority:      priority,
       );
 
       await _db.upsertTodo(todo);
       loadTodos(ownerEmail);
       _error = null;
       return true;
-    } catch (_) {
-      _error = 'Failed to add todo.';
+    } catch (e) {
+      _error = 'Failed to add todo: $e';
       return false;
     } finally {
       _setBusy(false);
     }
   }
 
+  // ── Update ────────────────────────────────────────────────────────────────
+
   Future<bool> updateTodo({
-    required String ownerEmail,
+    required String    ownerEmail,
     required TodoModel existing,
-    required String newTitle,
-    required String newNotePlaintext,
-    DateTime? dueDate,
-    required String priority,
+    required String    newTitle,
+    required String    newNotePlaintext,
+    DateTime?          dueDate,
+    required String    priority,
   }) async {
     _setBusy(true);
     try {
-      if (newTitle.trim().isEmpty) {
-        _error = 'Title is required.';
-        return false;
-      }
-
-      if (!priorities.contains(priority)) {
-        _error = 'Invalid priority.';
-        return false;
-      }
+      if (newTitle.trim().isEmpty) { _error = 'Title is required.'; return false; }
+      if (!priorities.contains(priority)) { _error = 'Invalid priority.'; return false; }
 
       final encrypted = _crypto.encryptSensitiveNote(newNotePlaintext);
 
       final updated = TodoModel(
-        id: existing.id,
-        ownerEmail: existing.ownerEmail,
-        title: newTitle.trim(),
+        id:            existing.id,
+        ownerEmail:    existing.ownerEmail,
+        title:         newTitle.trim(),
         encryptedNote: encrypted,
-        completed: existing.completed,
-        createdAt: existing.createdAt,
-        updatedAt: DateTime.now(),
-        dueDate: dueDate,
-        priority: priority,
+        completed:     existing.completed,
+        createdAt:     existing.createdAt,
+        updatedAt:     DateTime.now(),
+        dueDate:       dueDate,
+        priority:      priority,
       );
 
       await _db.upsertTodo(updated);
       loadTodos(ownerEmail);
       _error = null;
       return true;
-    } catch (_) {
-      _error = 'Failed to update todo.';
+    } catch (e) {
+      _error = 'Failed to update todo: $e';
       return false;
     } finally {
       _setBusy(false);
     }
   }
 
+  // ── Toggle complete ───────────────────────────────────────────────────────
+
   Future<void> toggleCompleted({
-    required String ownerEmail,
+    required String    ownerEmail,
     required TodoModel todo,
   }) async {
     _setBusy(true);
@@ -164,6 +151,8 @@ class TodoViewModel extends ChangeNotifier {
     }
   }
 
+  // ── Delete one ────────────────────────────────────────────────────────────
+
   Future<void> deleteTodo({
     required String ownerEmail,
     required String todoId,
@@ -177,8 +166,19 @@ class TodoViewModel extends ChangeNotifier {
     }
   }
 
-  void _setBusy(bool v) {
-    _busy = v;
-    notifyListeners();
+  // ── Delete all ────────────────────────────────────────────────────────────
+
+  Future<void> deleteAllTodos(String ownerEmail) async {
+    _setBusy(true);
+    try {
+      await _db.deleteAllTodosForOwner(ownerEmail);
+      loadTodos(ownerEmail);
+      // ignore: avoid_print
+      print('[TodoViewModel] All todos deleted for $ownerEmail');
+    } finally {
+      _setBusy(false);
+    }
   }
+
+  void _setBusy(bool v) { _busy = v; notifyListeners(); }
 }

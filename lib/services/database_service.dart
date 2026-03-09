@@ -38,45 +38,51 @@ class DatabaseService {
     );
   }
 
-  // -------------------- USER --------------------
+  // ── USER ──────────────────────────────────────────────────────────────────
 
-  Future<bool> userExists(String email) async {
-    return _users.containsKey(email.toLowerCase().trim());
-  }
+  Future<bool> userExists(String email) async =>
+      _users.containsKey(email.toLowerCase().trim());
 
-  Future<void> createUser(UserModel user) async {
-    await _users.put(user.email.toLowerCase().trim(), user);
-  }
+  Future<void> createUser(UserModel user) async =>
+      _users.put(user.email.toLowerCase().trim(), user);
 
-  Future<UserModel?> getUser(String email) async {
-    return _users.get(email.toLowerCase().trim());
-  }
+  Future<UserModel?> getUser(String email) async =>
+      _users.get(email.toLowerCase().trim());
 
-  Future<void> updateUser(UserModel user) async {
-    await _users.put(user.email.toLowerCase().trim(), user);
-  }
+  Future<void> updateUser(UserModel user) async =>
+      _users.put(user.email.toLowerCase().trim(), user);
 
-  // -------------------- TODOS --------------------
+  // ── TODOS ─────────────────────────────────────────────────────────────────
 
   List<TodoModel> getTodosForOwner(String email) {
     final owner = email.toLowerCase().trim();
-    final all = _todos.values.where((t) => t.ownerEmail == owner).toList();
+    final all   = _todos.values.where((t) => t.ownerEmail == owner).toList();
     all.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return all;
   }
 
-  Future<void> upsertTodo(TodoModel todo) async {
-    await _todos.put(todo.id, todo);
+  Future<void> upsertTodo(TodoModel todo) async =>
+      _todos.put(todo.id, todo);
+
+  Future<void> deleteTodo(String todoId) async =>
+      _todos.delete(todoId);
+
+  /// Deletes every todo belonging to [email] in a single batch.
+  Future<void> deleteAllTodosForOwner(String email) async {
+    final owner = email.toLowerCase().trim();
+    final keys  = _todos.values
+        .where((t) => t.ownerEmail == owner)
+        .map((t)    => t.id)
+        .toList();
+    await _todos.deleteAll(keys);
   }
 
-  Future<void> deleteTodo(String todoId) async {
-    await _todos.delete(todoId);
-  }
+  // ── Utilities ─────────────────────────────────────────────────────────────
 
   String newId() {
-    final rnd = Random.secure();
+    final rnd  = Random.secure();
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    final now = DateTime.now().millisecondsSinceEpoch.toString();
+    final now  = DateTime.now().millisecondsSinceEpoch.toString();
     final rand = List.generate(12, (_) => chars[rnd.nextInt(chars.length)]).join();
     return '$now-$rand';
   }

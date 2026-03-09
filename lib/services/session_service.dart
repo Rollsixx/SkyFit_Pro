@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import '../utils/constants.dart';
 
@@ -7,10 +6,10 @@ class SessionService extends ChangeNotifier {
   Timer? _timeoutTimer;
   Timer? _warningTimer;
 
-  bool _locked = true;
+  bool _locked       = true;
   bool _warningActive = false;
 
-  bool get isLocked => _locked;
+  bool get isLocked       => _locked;
   bool get isWarningActive => _warningActive;
 
   Future<void> Function()? onTimeoutLock;
@@ -34,7 +33,6 @@ class SessionService extends ChangeNotifier {
 
   void handleUserInteraction() {
     if (_locked) return;
-
     _dismissWarning();
     _restartTimers();
   }
@@ -43,19 +41,18 @@ class SessionService extends ChangeNotifier {
     _timeoutTimer?.cancel();
     _warningTimer?.cancel();
 
-    final totalSeconds = Constants.inactivityTimeoutSeconds;
-    final warningAfterSeconds =
-        totalSeconds - Constants.sessionWarningSeconds;
+    final total          = Constants.inactivityTimeoutSeconds;
+    final warningAfterSec = total - Constants.sessionWarningSeconds;
 
-    if (warningAfterSeconds > 0) {
+    if (warningAfterSec > 0) {
       _warningTimer = Timer(
-        Duration(seconds: warningAfterSeconds),
+        Duration(seconds: warningAfterSec),
         _triggerWarning,
       );
     }
 
     _timeoutTimer = Timer(
-      Duration(seconds: totalSeconds),
+      Duration(seconds: total),
       () {
         lockSession();
         onTimeoutLock?.call();
@@ -65,7 +62,6 @@ class SessionService extends ChangeNotifier {
 
   void _triggerWarning() {
     if (_locked || _warningActive) return;
-
     _warningActive = true;
     notifyListeners();
     onWarningStart?.call();
@@ -73,7 +69,6 @@ class SessionService extends ChangeNotifier {
 
   void _dismissWarning() {
     if (!_warningActive) return;
-
     _warningActive = false;
     notifyListeners();
     onWarningDismiss?.call();

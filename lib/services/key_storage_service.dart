@@ -15,20 +15,18 @@ class KeyStorageService {
       return base64Decode(existing);
     }
 
-    final rnd = Random.secure();
+    final rnd      = Random.secure();
     final keyBytes = List<int>.generate(32, (_) => rnd.nextInt(256));
     await _secureStorage.write(
-      key: Constants.secureDbKey,
+      key:   Constants.secureDbKey,
       value: base64Encode(keyBytes),
     );
     return keyBytes;
   }
 
-  Future<void> saveLastEmail(String email) async {
-    await _secureStorage.write(key: Constants.secureLastEmail, value: email);
-  }
+  Future<void> saveLastEmail(String email) async =>
+      _secureStorage.write(key: Constants.secureLastEmail, value: email);
 
-  Future<String?> readLastEmail() async {
-    return _secureStorage.read(key: Constants.secureLastEmail);
-  }
+  Future<String?> readLastEmail() async =>
+      _secureStorage.read(key: Constants.secureLastEmail);
 }

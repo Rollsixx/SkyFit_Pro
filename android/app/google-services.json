@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "306940203541",
+    "project_id": "ciphertask-7fb98",
+    "storage_bucket": "ciphertask-7fb98.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:306940203541:android:e4225f1a0257c611e6341c",
+        "android_client_info": {
+          "package_name": "com.example.cipher_task"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAUrEj2MwM5cX1g-Bk2MXrtmuV7_5K-Vbw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

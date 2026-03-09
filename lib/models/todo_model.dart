@@ -11,7 +11,7 @@ class TodoModel extends HiveObject {
   @HiveField(2)
   final String title;
 
-  /// Encrypted payload string: v1:<iv_b64>:<cipher_b64>
+  /// Encrypted payload: v1:<iv_b64>:<cipher_b64>
   @HiveField(3)
   final String encryptedNote;
 
@@ -28,7 +28,7 @@ class TodoModel extends HiveObject {
   final DateTime? dueDate;
 
   @HiveField(8)
-  final String priority; // Low, Medium, High
+  final String priority; // 'Low' | 'Medium' | 'High'
 
   TodoModel({
     required this.id,
@@ -52,20 +52,19 @@ class TodoModel extends HiveObject {
     String? priority,
   }) {
     return TodoModel(
-      id: id,
-      ownerEmail: ownerEmail,
-      title: title ?? this.title,
+      id:            id,
+      ownerEmail:    ownerEmail,
+      title:         title ?? this.title,
       encryptedNote: encryptedNote ?? this.encryptedNote,
-      completed: completed ?? this.completed,
-      createdAt: createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
-      priority: priority ?? this.priority,
+      completed:     completed ?? this.completed,
+      createdAt:     createdAt,
+      updatedAt:     updatedAt ?? this.updatedAt,
+      dueDate:       clearDueDate ? null : (dueDate ?? this.dueDate),
+      priority:      priority ?? this.priority,
     );
   }
 }
 
-/// Manual Hive adapter
 class TodoModelAdapter extends TypeAdapter<TodoModel> {
   @override
   final int typeId = 2;
@@ -74,22 +73,20 @@ class TodoModelAdapter extends TypeAdapter<TodoModel> {
   TodoModel read(BinaryReader reader) {
     final numOfFields = reader.readByte();
     final fields = <int, dynamic>{};
-
     for (int i = 0; i < numOfFields; i++) {
       final key = reader.readByte();
       fields[key] = reader.read();
     }
-
     return TodoModel(
-      id: fields[0] as String,
-      ownerEmail: fields[1] as String,
-      title: fields[2] as String,
+      id:            fields[0] as String,
+      ownerEmail:    fields[1] as String,
+      title:         fields[2] as String,
       encryptedNote: fields[3] as String,
-      completed: fields[4] as bool,
-      createdAt: fields[5] as DateTime,
-      updatedAt: fields[6] as DateTime,
-      dueDate: fields[7] as DateTime?,
-      priority: (fields[8] as String?) ?? 'Medium',
+      completed:     fields[4] as bool,
+      createdAt:     fields[5] as DateTime,
+      updatedAt:     fields[6] as DateTime,
+      dueDate:       fields[7] as DateTime?,
+      priority:      (fields[8] as String?) ?? 'Medium',
     );
   }
 
@@ -97,23 +94,14 @@ class TodoModelAdapter extends TypeAdapter<TodoModel> {
   void write(BinaryWriter writer, TodoModel obj) {
     writer
       ..writeByte(9)
-      ..writeByte(0)
-      ..write(obj.id)
-      ..writeByte(1)
-      ..write(obj.ownerEmail)
-      ..writeByte(2)
-      ..write(obj.title)
-      ..writeByte(3)
-      ..write(obj.encryptedNote)
-      ..writeByte(4)
-      ..write(obj.completed)
-      ..writeByte(5)
-      ..write(obj.createdAt)
-      ..writeByte(6)
-      ..write(obj.updatedAt)
-      ..writeByte(7)
-      ..write(obj.dueDate)
-      ..writeByte(8)
-      ..write(obj.priority);
+      ..writeByte(0)..write(obj.id)
+      ..writeByte(1)..write(obj.ownerEmail)
+      ..writeByte(2)..write(obj.title)
+      ..writeByte(3)..write(obj.encryptedNote)
+      ..writeByte(4)..write(obj.completed)
+      ..writeByte(5)..write(obj.createdAt)
+      ..writeByte(6)..write(obj.updatedAt)
+      ..writeByte(7)..write(obj.dueDate)
+      ..writeByte(8)..write(obj.priority);
   }
 }

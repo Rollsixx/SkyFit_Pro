@@ -31,6 +31,8 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<key>NSFaceIDUsageDescription</key>
 	<string>We use Face ID / Touch ID to unlock CipherTask securely.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>CipherTask uses Face ID to unlock the app.</string>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 
 import '../utils/constants.dart';
@@ -12,14 +13,14 @@ class RegisterView extends StatefulWidget {
 }
 
 class _RegisterViewState extends State<RegisterView> {
-  final _email = TextEditingController();
-  final _pass = TextEditingController();
+  final _email       = TextEditingController();
+  final _pass        = TextEditingController();
   final _confirmPass = TextEditingController();
-  final _otp = TextEditingController();
+  final _otp         = TextEditingController();
 
-  bool _otpStage = false;
-  bool _obscure = true;
-  bool _obscureConfirm = true;
+  bool _otpStage        = false;
+  bool _obscure         = true;
+  bool _obscureConfirm  = true;
 
   @override
   void dispose() {
@@ -30,23 +31,29 @@ class _RegisterViewState extends State<RegisterView> {
     super.dispose();
   }
 
-  void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _snack(String msg, {bool success = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: success
+            ? Constants.prioLow.withOpacity(0.9)
+            : null,
+      ),
+    );
   }
 
   Future<void> _begin() async {
     final auth = context.read<AuthViewModel>();
     auth.clearError();
 
-    // UI convenience check
     if (_pass.text != _confirmPass.text) {
       _snack('Passwords do not match.');
       return;
     }
 
     final ok = await auth.beginRegistration(
-      email: _email.text,
-      password: _pass.text,
+      email:           _email.text,
+      password:        _pass.text,
       confirmPassword: _confirmPass.text,
     );
 
@@ -58,18 +65,10 @@ class _RegisterViewState extends State<RegisterView> {
 
     setState(() => _otpStage = true);
 
-    final otp = auth.otpForSimulation ?? '------';
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('OTP (Simulation Only)'),
-        content: Text(
-          'This is a simulation.\n\nYour OTP code is:\n\n$otp\n\nType it in the OTP field to finish registration.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
-        ],
-      ),
+    // Inform user to check their inbox
+    _snack(
+      'OTP sent to ${_email.text.trim()}. Check your inbox (also printed in debug console).',
+      success: true,
     );
   }
 
@@ -78,141 +77,224 @@ class _RegisterViewState extends State<RegisterView> {
     auth.clearError();
 
     final ok = await auth.confirmRegistrationOtpAndCreateUser(
-      email: _email.text,
+      email:    _email.text,
       password: _pass.text,
       otpInput: _otp.text,
     );
 
     if (!mounted) return;
     if (ok) {
-      _snack('Account created! You can login now.');
+      _snack('Account created! You can log in now.', success: true);
       Navigator.pop(context);
     } else {
-      _snack(auth.error ?? 'OTP failed');
+      _snack(auth.error ?? 'OTP verification failed');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthViewModel>();
+    final auth   = context.watch<AuthViewModel>();
+    final cs     = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: Constants.dsBlack,
       appBar: AppBar(
-        backgroundColor: Constants.dsBlack,
-        foregroundColor: Colors.white,
-        title: const Text('Register • CipherTask'),
+        title: const Text('Create Account'),
+        leading: const BackButton(),
       ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(18),
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 520),
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                color: Colors.white.withOpacity(0.04),
-                border: Border.all(color: Constants.dsCrimson.withOpacity(0.35)),
-              ),
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Create Account',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
+                  // ── Header ────────────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [cs.primary.withOpacity(0.15), cs.secondary.withOpacity(0.10)],
+                        begin:  Alignment.topLeft,
+                        end:    Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: cs.primary.withOpacity(0.25)),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          _otpStage ? Icons.mark_email_read_outlined : Icons.person_add_outlined,
+                          size:  40,
+                          color: cs.primary,
                         ),
-                  ),
-                  const SizedBox(height: 10),
+                        const SizedBox(height: 8),
+                        Text(
+                          _otpStage ? 'Verify Your Email' : 'New Account',
+                          style: Theme.of(context).textTheme.headlineMedium,
+                        ),
+                        Text(
+                          _otpStage
+                              ? 'Enter the 6-digit code sent to\n${_email.text.trim()}'
+                              : 'We\'ll send a verification code to your email.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: isDark ? Colors.white60 : Colors.black54,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ).animate().fadeIn().slideY(begin: -0.08, end: 0, duration: 350.ms),
 
-                  TextField(
-                    controller: _email,
-                    enabled: !auth.isBusy && !_otpStage,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Email',
-                      labelStyle: const TextStyle(color: Colors.white70),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.06),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  const SizedBox(height: 24),
+
+                  // ── Step 1 Fields (disabled after OTP sent) ───────
+                  AnimatedOpacity(
+                    opacity:  _otpStage ? 0.45 : 1.0,
+                    duration: const Duration(milliseconds: 300),
+                    child: Column(
+                      children: [
+                        TextField(
+                          controller:   _email,
+                          enabled:      !auth.isBusy && !_otpStage,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration:   const InputDecoration(
+                            labelText:  'Email address',
+                            prefixIcon: Icon(Icons.alternate_email_rounded),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller:  _pass,
+                          enabled:     !auth.isBusy && !_otpStage,
+                          obscureText: _obscure,
+                          decoration:  InputDecoration(
+                            labelText:  'Password (min 8 chars)',
+                            prefixIcon: const Icon(Icons.lock_outline_rounded),
+                            suffixIcon: IconButton(
+                              icon: Icon(_obscure
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined),
+                              onPressed: () => setState(() => _obscure = !_obscure),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller:  _confirmPass,
+                          enabled:     !auth.isBusy && !_otpStage,
+                          obscureText: _obscureConfirm,
+                          decoration:  InputDecoration(
+                            labelText:  'Confirm password',
+                            prefixIcon: const Icon(Icons.lock_person_outlined),
+                            suffixIcon: IconButton(
+                              icon: Icon(_obscureConfirm
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined),
+                              onPressed: () =>
+                                  setState(() => _obscureConfirm = !_obscureConfirm),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 10),
 
-                  TextField(
-                    controller: _pass,
-                    enabled: !auth.isBusy && !_otpStage,
-                    obscureText: _obscure,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Password (min 8 chars)',
-                      labelStyle: const TextStyle(color: Colors.white70),
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off, color: Colors.white70),
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.06),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // ✅ Confirm Password
-                  TextField(
-                    controller: _confirmPass,
-                    enabled: !auth.isBusy && !_otpStage,
-                    obscureText: _obscureConfirm,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Retype Password',
-                      labelStyle: const TextStyle(color: Colors.white70),
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscureConfirm ? Icons.visibility : Icons.visibility_off, color: Colors.white70),
-                        onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.06),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
+                  // ── Step 2: OTP Field ─────────────────────────────
                   if (_otpStage) ...[
+                    const SizedBox(height: 16),
                     TextField(
-                      controller: _otp,
-                      enabled: !auth.isBusy,
+                      controller:   _otp,
+                      enabled:      !auth.isBusy,
                       keyboardType: TextInputType.number,
-                      style: const TextStyle(color: Colors.white),
+                      maxLength:    6,
+                      textAlign:    TextAlign.center,
+                      style: const TextStyle(
+                        fontSize:    28,
+                        fontWeight:  FontWeight.w800,
+                        letterSpacing: 12,
+                      ),
                       decoration: InputDecoration(
-                        labelText: 'OTP (Simulation)',
-                        labelStyle: const TextStyle(color: Colors.white70),
-                        filled: true,
-                        fillColor: Colors.white.withOpacity(0.06),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        labelText:   '6-Digit OTP',
+                        counterText: '',
+                        prefixIcon:  const Icon(Icons.key_outlined),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide:   BorderSide(color: cs.secondary, width: 2),
+                        ),
+                      ),
+                    ).animate().fadeIn(duration: 300.ms).scale(begin: const Offset(0.95, 0.95)),
+
+                    const SizedBox(height: 8),
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: auth.isBusy
+                            ? null
+                            : () {
+                                setState(() => _otpStage = false);
+                                _otp.clear();
+                              },
+                        icon:  const Icon(Icons.arrow_back_rounded, size: 16),
+                        label: const Text('Change email / password'),
                       ),
                     ),
-                    const SizedBox(height: 12),
                   ],
 
-                  ElevatedButton(
-                    onPressed: auth.isBusy
-                        ? null
-                        : _otpStage
-                            ? _confirm
-                            : _begin,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Constants.dsTeal,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  const SizedBox(height: 22),
+
+                  // ── Primary button ────────────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: auth.isBusy ? null : (_otpStage ? _confirm : _begin),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _otpStage ? cs.secondary : cs.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: Icon(
+                        _otpStage
+                            ? Icons.verified_user_outlined
+                            : Icons.send_outlined,
+                        size: 20,
+                      ),
+                      label: auth.isBusy
+                          ? const SizedBox(
+                              height: 18, width: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : Text(_otpStage ? 'Verify & Create Account' : 'Send OTP to Email'),
                     ),
-                    child: auth.isBusy
-                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                        : Text(_otpStage ? 'Confirm OTP & Create Account' : 'Generate OTP (Simulation)'),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ── Info note ─────────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color:        cs.secondary.withOpacity(0.07),
+                      borderRadius: BorderRadius.circular(12),
+                      border:       Border.all(color: cs.secondary.withOpacity(0.25)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 16, color: cs.secondary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'OTP expires in 10 minutes. If EmailJS is not configured, '
+                            'the code is printed in the debug console.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.white54 : Colors.black54,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
