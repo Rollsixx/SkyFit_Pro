@@ -5,7 +5,7 @@ import '../services/database_service.dart';
 import '../services/encryption_service.dart';
 
 class TodoViewModel extends ChangeNotifier {
-  final DatabaseService  _db;
+  final DatabaseService   _db;
   final EncryptionService _crypto;
 
   bool    _busy  = false;
@@ -23,8 +23,6 @@ class TodoViewModel extends ChangeNotifier {
 
   void clearError() { _error = null; notifyListeners(); }
 
-  // ── Read ──────────────────────────────────────────────────────────────────
-
   void loadTodos(String ownerEmail) {
     _todos = _db.getTodosForOwner(ownerEmail);
     notifyListeners();
@@ -33,16 +31,16 @@ class TodoViewModel extends ChangeNotifier {
   String decryptNoteForUi(TodoModel todo) =>
       _crypto.decryptSensitiveNote(todo.encryptedNote);
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
-
+  // ── Stats ──────────────────────────────────────────────────────────────────
   int get totalCount     => _todos.length;
-  int get completedCount => _todos.where((t) =>  t.completed).length;
+  int get completedCount => _todos.where((t) => t.completed).length;
   int get pendingCount   => _todos.where((t) => !t.completed).length;
+  int get pinnedCount    => _todos.where((t) => t.pinned).length;
   int get overdueCount {
     final now = DateTime.now();
-    return _todos.where((t) =>
-      !t.completed && t.dueDate != null && t.dueDate!.isBefore(now),
-    ).length;
+    return _todos
+        .where((t) => !t.completed && t.dueDate != null && t.dueDate!.isBefore(now))
+        .length;
   }
 
   bool isOverdue(TodoModel todo) {
@@ -50,8 +48,7 @@ class TodoViewModel extends ChangeNotifier {
     return todo.dueDate!.isBefore(DateTime.now());
   }
 
-  // ── Create ────────────────────────────────────────────────────────────────
-
+  // ── Add ────────────────────────────────────────────────────────────────────
   Future<bool> addTodo({
     required String   ownerEmail,
     required String   title,
@@ -61,13 +58,11 @@ class TodoViewModel extends ChangeNotifier {
   }) async {
     _setBusy(true);
     try {
-      if (title.trim().isEmpty) { _error = 'Title is required.'; return false; }
+      if (title.trim().isEmpty)        { _error = 'Title is required.';   return false; }
       if (!priorities.contains(priority)) { _error = 'Invalid priority.'; return false; }
-
       final now       = DateTime.now();
       final encrypted = _crypto.encryptSensitiveNote(notePlaintext);
-
-      final todo = TodoModel(
+      await _db.upsertTodo(TodoModel(
         id:            _db.newId(),
         ownerEmail:    ownerEmail.toLowerCase().trim(),
         title:         title.trim(),
@@ -77,22 +72,18 @@ class TodoViewModel extends ChangeNotifier {
         updatedAt:     now,
         dueDate:       dueDate,
         priority:      priority,
-      );
-
-      await _db.upsertTodo(todo);
+        pinned:        false,
+      ));
       loadTodos(ownerEmail);
       _error = null;
       return true;
-    } catch (e) {
-      _error = 'Failed to add todo: $e';
+    } catch (_) {
+      _error = 'Failed to add todo.';
       return false;
-    } finally {
-      _setBusy(false);
-    }
+    } finally { _setBusy(false); }
   }
 
-  // ── Update ────────────────────────────────────────────────────────────────
-
+  // ── Update ─────────────────────────────────────────────────────────────────
   Future<bool> updateTodo({
     required String    ownerEmail,
     required TodoModel existing,
@@ -103,12 +94,10 @@ class TodoViewModel extends ChangeNotifier {
   }) async {
     _setBusy(true);
     try {
-      if (newTitle.trim().isEmpty) { _error = 'Title is required.'; return false; }
-      if (!priorities.contains(priority)) { _error = 'Invalid priority.'; return false; }
-
+      if (newTitle.trim().isEmpty)        { _error = 'Title is required.';   return false; }
+      if (!priorities.contains(priority)) { _error = 'Invalid priority.';    return false; }
       final encrypted = _crypto.encryptSensitiveNote(newNotePlaintext);
-
-      final updated = TodoModel(
+      await _db.upsertTodo(TodoModel(
         id:            existing.id,
         ownerEmail:    existing.ownerEmail,
         title:         newTitle.trim(),
@@ -118,41 +107,50 @@ class TodoViewModel extends ChangeNotifier {
         updatedAt:     DateTime.now(),
         dueDate:       dueDate,
         priority:      priority,
-      );
-
-      await _db.upsertTodo(updated);
+        pinned:        existing.pinned,   // preserve pin state on edit
+      ));
       loadTodos(ownerEmail);
       _error = null;
       return true;
-    } catch (e) {
-      _error = 'Failed to update todo: $e';
+    } catch (_) {
+      _error = 'Failed to update todo.';
       return false;
-    } finally {
-      _setBusy(false);
-    }
+    } finally { _setBusy(false); }
   }
 
-  // ── Toggle complete ───────────────────────────────────────────────────────
-
+  // ── Toggle completed ───────────────────────────────────────────────────────
   Future<void> toggleCompleted({
     required String    ownerEmail,
     required TodoModel todo,
   }) async {
     _setBusy(true);
     try {
-      final updated = todo.copyWith(
+      await _db.upsertTodo(todo.copyWith(
         completed: !todo.completed,
         updatedAt: DateTime.now(),
-      );
-      await _db.upsertTodo(updated);
+      ));
       loadTodos(ownerEmail);
-    } finally {
-      _setBusy(false);
-    }
+    } finally { _setBusy(false); }
   }
 
-  // ── Delete one ────────────────────────────────────────────────────────────
+  // ── Toggle pin ─────────────────────────────────────────────────────────────
+  Future<void> togglePin({
+    required String    ownerEmail,
+    required TodoModel todo,
+  }) async {
+    _setBusy(true);
+    try {
+      await _db.upsertTodo(todo.copyWith(
+        pinned:    !todo.pinned,
+        updatedAt: DateTime.now(),
+      ));
+      loadTodos(ownerEmail);
+      // ignore: avoid_print
+      print('[TodoViewModel] ${todo.pinned ? "Unpinned" : "Pinned"}: ${todo.title}');
+    } finally { _setBusy(false); }
+  }
 
+  // ── Delete ─────────────────────────────────────────────────────────────────
   Future<void> deleteTodo({
     required String ownerEmail,
     required String todoId,
@@ -161,23 +159,15 @@ class TodoViewModel extends ChangeNotifier {
     try {
       await _db.deleteTodo(todoId);
       loadTodos(ownerEmail);
-    } finally {
-      _setBusy(false);
-    }
+    } finally { _setBusy(false); }
   }
-
-  // ── Delete all ────────────────────────────────────────────────────────────
 
   Future<void> deleteAllTodos(String ownerEmail) async {
     _setBusy(true);
     try {
       await _db.deleteAllTodosForOwner(ownerEmail);
       loadTodos(ownerEmail);
-      // ignore: avoid_print
-      print('[TodoViewModel] All todos deleted for $ownerEmail');
-    } finally {
-      _setBusy(false);
-    }
+    } finally { _setBusy(false); }
   }
 
   void _setBusy(bool v) { _busy = v; notifyListeners(); }

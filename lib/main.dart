@@ -97,21 +97,16 @@ class CipherTaskApp extends StatelessWidget {
 
             Timer? _vibTimer;
 
-            // ── Stop all vibration ────────────────────────────────────
             Future<void> _stopVib() async {
               _vibTimer?.cancel();
               _vibTimer = null;
               try { await Vibration.cancel(); } catch (_) {}
             }
 
-            // ── Start repeating strong vibration ─────────────────────
-            // Vibrates: 400ms on, 400ms off, repeating every 800ms
             Future<void> _startVib() async {
               await _stopVib();
-
               final hasVib = await Vibration.hasVibrator() ?? false;
               if (!hasVib) {
-                // Fallback to HapticFeedback if no vibrator found
                 HapticFeedback.heavyImpact();
                 _vibTimer = Timer.periodic(
                   const Duration(milliseconds: 800),
@@ -119,23 +114,15 @@ class CipherTaskApp extends StatelessWidget {
                 );
                 return;
               }
-
-              final hasAmplitude =
-                  await Vibration.hasAmplitudeControl() ?? false;
-
-              if (hasAmplitude) {
-                // Strong pulse with amplitude control (most modern Androids)
+              final hasAmp = await Vibration.hasAmplitudeControl() ?? false;
+              if (hasAmp) {
                 Vibration.vibrate(
-                  pattern:    [0, 400, 400, 400, 400, 400],
+                  pattern:     [0, 400, 400, 400, 400, 400],
                   intensities: [0, 255,   0, 200,   0, 180],
-                  repeat: 0, // repeat from index 0
-                );
-              } else {
-                // Basic pattern repeat for older devices
-                Vibration.vibrate(
-                  pattern: [0, 500, 300],
                   repeat: 0,
                 );
+              } else {
+                Vibration.vibrate(pattern: [0, 500, 300], repeat: 0);
               }
             }
 
@@ -144,7 +131,7 @@ class CipherTaskApp extends StatelessWidget {
                 ?..hideCurrentSnackBar()
                 ..showSnackBar(const SnackBar(
                   duration: Duration(seconds: Constants.sessionWarningSeconds),
-                  content:  Text(
+                  content: Text(
                     '⚠️  Session expires in 30 s – tap anywhere to stay signed in.',
                   ),
                 ));
@@ -152,15 +139,13 @@ class CipherTaskApp extends StatelessWidget {
             };
 
             sessionService.onWarningDismiss = () async {
-              Constants.scaffoldMessengerKey.currentState
-                  ?.hideCurrentSnackBar();
+              Constants.scaffoldMessengerKey.currentState?.hideCurrentSnackBar();
               await _stopVib();
             };
 
             sessionService.onTimeoutLock = () async {
               await _stopVib();
-              Constants.scaffoldMessengerKey.currentState
-                  ?.hideCurrentSnackBar();
+              Constants.scaffoldMessengerKey.currentState?.hideCurrentSnackBar();
               vm.onSessionTimedOut();
               Constants.navigatorKey.currentState?.pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginView()),
@@ -177,6 +162,7 @@ class CipherTaskApp extends StatelessWidget {
         ),
       ],
 
+      // ── Consumer rebuilds the whole app when theme OR font changes ──────────
       child: Consumer<ThemeViewModel>(
         builder: (_, themeVm, __) => Listener(
           behavior:      HitTestBehavior.translucent,
@@ -186,8 +172,8 @@ class CipherTaskApp extends StatelessWidget {
             scaffoldMessengerKey:       Constants.scaffoldMessengerKey,
             debugShowCheckedModeBanner: false,
             title:     'CipherTask',
-            theme:     AppTheme.light,
-            darkTheme: AppTheme.dark,
+            theme:     AppTheme.light(themeVm.font),   // ← passes font
+            darkTheme: AppTheme.dark(themeVm.font),    // ← passes font
             themeMode: themeVm.mode,
             home:      const LoginView(),
           ),
