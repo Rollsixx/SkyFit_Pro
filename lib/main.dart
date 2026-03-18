@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:screen_protector/screen_protector.dart';
 import 'package:vibration/vibration.dart';
 
+import 'firebase_options.dart';
 import 'services/database_service.dart';
 import 'services/email_otp_service.dart';
 import 'services/encryption_service.dart';
@@ -18,16 +19,19 @@ import 'utils/app_theme.dart';
 import 'utils/constants.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/theme_viewmodel.dart';
-import 'viewmodels/todo_viewmodel.dart';
 import 'views/login_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  try { await ScreenProtector.preventScreenshotOn(); } catch (_) {}
+  try {
+    await ScreenProtector.preventScreenshotOn();
+  } catch (_) {}
 
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
     // ignore: avoid_print
     print('[main] Firebase initialized.');
   } catch (e) {
@@ -35,36 +39,36 @@ Future<void> main() async {
     print('[main] Firebase init skipped: $e');
   }
 
-  const secureStorage     = FlutterSecureStorage();
+  const secureStorage = FlutterSecureStorage();
   final keyStorageService = KeyStorageService(secureStorage);
-  final dbKey32           = await keyStorageService.getOrCreateDbKey32();
+  final dbKey32 = await keyStorageService.getOrCreateDbKey32();
 
-  final dbService      = DatabaseService(dbKey32);
+  final dbService = DatabaseService(dbKey32);
   await dbService.init();
 
-  final cryptoService  = EncryptionService(dbKey32);
+  final cryptoService = EncryptionService(dbKey32);
   final sessionService = SessionService();
 
   final themeVm = ThemeViewModel();
   await themeVm.load();
 
-  runApp(CipherTaskApp(
+  runApp(SkyFitApp(
     keyStorageService: keyStorageService,
-    databaseService:   dbService,
+    databaseService: dbService,
     encryptionService: cryptoService,
-    sessionService:    sessionService,
-    themeViewModel:    themeVm,
+    sessionService: sessionService,
+    themeViewModel: themeVm,
   ));
 }
 
-class CipherTaskApp extends StatelessWidget {
+class SkyFitApp extends StatelessWidget {
   final KeyStorageService keyStorageService;
-  final DatabaseService   databaseService;
+  final DatabaseService databaseService;
   final EncryptionService encryptionService;
-  final SessionService    sessionService;
-  final ThemeViewModel    themeViewModel;
+  final SessionService sessionService;
+  final ThemeViewModel themeViewModel;
 
-  const CipherTaskApp({
+  const SkyFitApp({
     super.key,
     required this.keyStorageService,
     required this.databaseService,
@@ -84,7 +88,6 @@ class CipherTaskApp extends StatelessWidget {
         Provider<FirebaseAuthService>(create: (_) => FirebaseAuthService()),
         ChangeNotifierProvider<SessionService>.value(value: sessionService),
         ChangeNotifierProvider<ThemeViewModel>.value(value: themeViewModel),
-
         ChangeNotifierProvider<AuthViewModel>(
           create: (ctx) {
             final vm = AuthViewModel(
@@ -95,20 +98,22 @@ class CipherTaskApp extends StatelessWidget {
               ctx.read<FirebaseAuthService>(),
             );
 
-            Timer? _vibTimer;
+            Timer? vibTimer;
 
-            Future<void> _stopVib() async {
-              _vibTimer?.cancel();
-              _vibTimer = null;
-              try { await Vibration.cancel(); } catch (_) {}
+            Future<void> stopVib() async {
+              vibTimer?.cancel();
+              vibTimer = null;
+              try {
+                await Vibration.cancel();
+              } catch (_) {}
             }
 
-            Future<void> _startVib() async {
-              await _stopVib();
+            Future<void> startVib() async {
+              await stopVib();
               final hasVib = await Vibration.hasVibrator() ?? false;
               if (!hasVib) {
                 HapticFeedback.heavyImpact();
-                _vibTimer = Timer.periodic(
+                vibTimer = Timer.periodic(
                   const Duration(milliseconds: 800),
                   (_) => HapticFeedback.heavyImpact(),
                 );
@@ -117,8 +122,8 @@ class CipherTaskApp extends StatelessWidget {
               final hasAmp = await Vibration.hasAmplitudeControl() ?? false;
               if (hasAmp) {
                 Vibration.vibrate(
-                  pattern:     [0, 400, 400, 400, 400, 400],
-                  intensities: [0, 255,   0, 200,   0, 180],
+                  pattern: [0, 400, 400, 400, 400, 400],
+                  intensities: [0, 255, 0, 200, 0, 180],
                   repeat: 0,
                 );
               } else {
@@ -135,17 +140,19 @@ class CipherTaskApp extends StatelessWidget {
                     '⚠️  Session expires in 30 s – tap anywhere to stay signed in.',
                   ),
                 ));
-              await _startVib();
+              await startVib();
             };
 
             sessionService.onWarningDismiss = () async {
-              Constants.scaffoldMessengerKey.currentState?.hideCurrentSnackBar();
-              await _stopVib();
+              Constants.scaffoldMessengerKey.currentState
+                  ?.hideCurrentSnackBar();
+              await stopVib();
             };
 
             sessionService.onTimeoutLock = () async {
-              await _stopVib();
-              Constants.scaffoldMessengerKey.currentState?.hideCurrentSnackBar();
+              await stopVib();
+              Constants.scaffoldMessengerKey.currentState
+                  ?.hideCurrentSnackBar();
               vm.onSessionTimedOut();
               Constants.navigatorKey.currentState?.pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginView()),
@@ -156,26 +163,20 @@ class CipherTaskApp extends StatelessWidget {
             return vm;
           },
         ),
-
-        ChangeNotifierProvider<TodoViewModel>(
-          create: (_) => TodoViewModel(databaseService, encryptionService),
-        ),
       ],
-
-      // ── Consumer rebuilds the whole app when theme OR font changes ──────────
       child: Consumer<ThemeViewModel>(
         builder: (_, themeVm, __) => Listener(
-          behavior:      HitTestBehavior.translucent,
+          behavior: HitTestBehavior.translucent,
           onPointerDown: (_) => sessionService.handleUserInteraction(),
           child: MaterialApp(
-            navigatorKey:               Constants.navigatorKey,
-            scaffoldMessengerKey:       Constants.scaffoldMessengerKey,
+            navigatorKey: Constants.navigatorKey,
+            scaffoldMessengerKey: Constants.scaffoldMessengerKey,
             debugShowCheckedModeBanner: false,
-            title:     'CipherTask',
-            theme:     AppTheme.light(themeVm.font),   // ← passes font
-            darkTheme: AppTheme.dark(themeVm.font),    // ← passes font
+            title: 'SkyFit Pro',
+            theme: AppTheme.light(themeVm.font),
+            darkTheme: AppTheme.dark(themeVm.font),
             themeMode: themeVm.mode,
-            home:      const LoginView(),
+            home: const LoginView(),
           ),
         ),
       ),

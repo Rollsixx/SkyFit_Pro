@@ -13,23 +13,23 @@ import '../services/key_storage_service.dart';
 import '../services/session_service.dart';
 
 class AuthViewModel extends ChangeNotifier {
-  final DatabaseService     _db;
-  final KeyStorageService   _keys;
-  final SessionService      _session;
-  final EmailOtpService     _otpSvc;
+  final DatabaseService _db;
+  final KeyStorageService _keys;
+  final SessionService _session;
+  final EmailOtpService _otpSvc;
   final FirebaseAuthService _firebase;
   final LocalAuthentication _localAuth = LocalAuthentication();
 
-  UserModel?         _currentUser;
-  bool               _busy  = false;
-  String?            _error;
+  UserModel? _currentUser;
+  bool _busy = false;
+  String? _error;
   GoogleSignInResult? _pendingGoogle;
 
-  bool    _biometricsChecked   = false;
-  bool    _biometricsAvailable = false;
+  bool _biometricsChecked = false;
+  bool _biometricsAvailable = false;
   String? _biometricInfo;
 
-  // ── Constructor — 5 args to match main.dart ────────────────────────────────
+  // ── Constructor ────────────────────────────────────────────────────────────
   AuthViewModel(
     this._db,
     this._keys,
@@ -39,27 +39,31 @@ class AuthViewModel extends ChangeNotifier {
   );
 
   // ── Getters ────────────────────────────────────────────────────────────────
-  UserModel? get currentUser         => _currentUser;
-  bool       get isBusy              => _busy;
-  String?    get error               => _error;
-  bool       get isLoggedIn          => _currentUser != null && !_session.isLocked;
-  bool       get biometricsChecked   => _biometricsChecked;
-  bool       get biometricsAvailable => _biometricsAvailable;
-  String?    get biometricInfo       => _biometricInfo;
+  UserModel? get currentUser => _currentUser;
+  bool get isBusy => _busy;
+  String? get error => _error;
+  bool get isLoggedIn => _currentUser != null && !_session.isLocked;
+  bool get biometricsChecked => _biometricsChecked;
+  bool get biometricsAvailable => _biometricsAvailable;
+  String? get biometricInfo => _biometricInfo;
 
-  bool    get pendingGoogleOtp   => _pendingGoogle != null;
+  bool get pendingGoogleOtp => _pendingGoogle != null;
   String? get pendingGoogleEmail => _pendingGoogle?.email;
 
-  void clearError() { _error = null; notifyListeners(); }
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
 
   // ── Biometrics ─────────────────────────────────────────────────────────────
   Future<void> checkBiometricsAvailability() async {
     try {
       final supported = await _localAuth.isDeviceSupported();
-      final canCheck  = await _localAuth.canCheckBiometrics;
+      final canCheck = await _localAuth.canCheckBiometrics;
       final available = await _localAuth.getAvailableBiometrics();
       _biometricsAvailable = supported && canCheck && available.isNotEmpty;
-      _biometricInfo = 'supported=$supported canCheck=$canCheck available=$available';
+      _biometricInfo =
+          'supported=$supported canCheck=$canCheck available=$available';
     } catch (e) {
       _biometricsAvailable = false;
       _biometricInfo = 'error=$e';
@@ -71,11 +75,15 @@ class AuthViewModel extends ChangeNotifier {
 
   // ── PBKDF2 ─────────────────────────────────────────────────────────────────
   List<int> _pbkdf2Hash({
-    required String password, required List<int> salt,
-    int iterations = 100000, int dkLen = 32,
+    required String password,
+    required List<int> salt,
+    int iterations = 100000,
+    int dkLen = 32,
   }) {
-    final params    = Pbkdf2Parameters(Uint8List.fromList(salt), iterations, dkLen);
-    final derivator = PBKDF2KeyDerivator(HMac(SHA256Digest(), 64))..init(params);
+    final params =
+        Pbkdf2Parameters(Uint8List.fromList(salt), iterations, dkLen);
+    final derivator = PBKDF2KeyDerivator(HMac(SHA256Digest(), 64))
+      ..init(params);
     return derivator.process(Uint8List.fromList(password.codeUnits)).toList();
   }
 
@@ -95,56 +103,87 @@ class AuthViewModel extends ChangeNotifier {
     _setBusy(true);
     try {
       final n = email.toLowerCase().trim();
-      if (n.isEmpty || !n.contains('@')) { _error = 'Please enter a valid email.'; return false; }
-      if (password.length < 8)           { _error = 'Password must be at least 8 characters.'; return false; }
-      if (password != confirmPassword)   { _error = 'Passwords do not match.'; return false; }
-      if (await _db.userExists(n))       { _error = 'User already exists.'; return false; }
+      if (n.isEmpty || !n.contains('@')) {
+        _error = 'Please enter a valid email.';
+        return false;
+      }
+      if (password.length < 8) {
+        _error = 'Password must be at least 8 characters.';
+        return false;
+      }
+      if (password != confirmPassword) {
+        _error = 'Passwords do not match.';
+        return false;
+      }
+      if (await _db.userExists(n)) {
+        _error = 'User already exists.';
+        return false;
+      }
       await _otpSvc.generateAndSend(n);
       _error = null;
       return true;
-    } finally { _setBusy(false); }
+    } finally {
+      _setBusy(false);
+    }
   }
 
   Future<bool> confirmRegistrationOtpAndCreateUser({
     required String email,
     required String password,
     required String otpInput,
+    int? age, // ← ADDED
+    double? weight, // ← ADDED
   }) async {
     _setBusy(true);
     try {
       final n = email.toLowerCase().trim();
-      if (!_otpSvc.verify(n, otpInput)) { _error = 'Incorrect or expired OTP.'; return false; }
-      final rnd  = Random.secure();
+      if (!_otpSvc.verify(n, otpInput)) {
+        _error = 'Incorrect or expired OTP.';
+        return false;
+      }
+      final rnd = Random.secure();
       final salt = List<int>.generate(16, (_) => rnd.nextInt(256));
       final hash = _pbkdf2Hash(password: password, salt: salt);
       await _db.createUser(UserModel(
-        email: n, passwordHash: hash, salt: salt,
-        hasLoggedInOnce: false, memberSince: DateTime.now(),
+        email: n,
+        passwordHash: hash,
+        salt: salt,
+        hasLoggedInOnce: false,
+        memberSince: DateTime.now(),
+        age: age, // ← ADDED
+        weight: weight, // ← ADDED
       ));
       _error = null;
       return true;
     } catch (_) {
       _error = 'Registration failed.';
       return false;
-    } finally { _setBusy(false); }
+    } finally {
+      _setBusy(false);
+    }
   }
 
   // ── Password Login ─────────────────────────────────────────────────────────
   Future<bool> loginWithPassword({
-    required String email, required String password,
+    required String email,
+    required String password,
   }) async {
     _setBusy(true);
     try {
-      final n    = email.toLowerCase().trim();
+      final n = email.toLowerCase().trim();
       final user = await _db.getUser(n);
-      if (user == null) { _error = 'User not found.'; return false; }
-      if (!_constantTimeEquals(
-          _pbkdf2Hash(password: password, salt: user.salt), user.passwordHash)) {
-        _error = 'Incorrect password.'; return false;
+      if (user == null) {
+        _error = 'User not found.';
+        return false;
+      }
+      if (!_constantTimeEquals(_pbkdf2Hash(password: password, salt: user.salt),
+          user.passwordHash)) {
+        _error = 'Incorrect password.';
+        return false;
       }
       if (!user.hasLoggedInOnce) {
         user.hasLoggedInOnce = true;
-        user.memberSince   ??= DateTime.now();
+        user.memberSince ??= DateTime.now();
         await _db.updateUser(user);
       }
       _currentUser = user;
@@ -156,7 +195,9 @@ class AuthViewModel extends ChangeNotifier {
     } catch (_) {
       _error = 'Login failed.';
       return false;
-    } finally { _setBusy(false); }
+    } finally {
+      _setBusy(false);
+    }
   }
 
   // ── Google Login Step 1 ────────────────────────────────────────────────────
@@ -164,21 +205,30 @@ class AuthViewModel extends ChangeNotifier {
     _setBusy(true);
     try {
       final result = await _firebase.signInWithGoogle();
-      if (result.cancelled) { _error = null; return false; }
-      if (!result.success)  { _error = result.errorMessage; return false; }
+      if (result.cancelled) {
+        _error = null;
+        return false;
+      }
+      if (!result.success) {
+        _error = result.errorMessage;
+        return false;
+      }
 
       _pendingGoogle = result;
       await _otpSvc.generateAndSend(result.email!.toLowerCase().trim());
       _error = null;
       notifyListeners();
       // ignore: avoid_print
-      print('[AuthViewModel] Google auth OK for ${result.email} — OTP sent');
+      print('[AuthViewModel] Google auth OK for '
+          '${result.email} — OTP sent');
       return true;
     } catch (e) {
       _error = 'Google login error: $e';
       _pendingGoogle = null;
       return false;
-    } finally { _setBusy(false); }
+    } finally {
+      _setBusy(false);
+    }
   }
 
   // ── Google OTP Step 2 ──────────────────────────────────────────────────────
@@ -186,36 +236,40 @@ class AuthViewModel extends ChangeNotifier {
     _setBusy(true);
     try {
       final pending = _pendingGoogle;
-      if (pending == null) { _error = 'Session expired. Try again.'; return false; }
+      if (pending == null) {
+        _error = 'Session expired. Try again.';
+        return false;
+      }
 
       final email = pending.email!.toLowerCase().trim();
       if (!_otpSvc.verify(email, otpInput)) {
-        _error = 'Incorrect or expired OTP.'; return false;
+        _error = 'Incorrect or expired OTP.';
+        return false;
       }
 
       UserModel? user = await _db.getUser(email);
       if (user == null) {
         user = UserModel(
-          email:          email,
-          passwordHash:   [],
-          salt:           [],
+          email: email,
+          passwordHash: [],
+          salt: [],
           hasLoggedInOnce: true,
-          displayName:    pending.displayName,
-          photoUrl:       pending.photoUrl,
-          isGoogleUser:   true,
-          memberSince:    DateTime.now(),
+          displayName: pending.displayName,
+          photoUrl: pending.photoUrl,
+          isGoogleUser: true,
+          memberSince: DateTime.now(),
         );
         await _db.createUser(user);
       } else {
-        user.displayName  = pending.displayName ?? user.displayName;
-        user.photoUrl     = pending.photoUrl    ?? user.photoUrl;
+        user.displayName = pending.displayName ?? user.displayName;
+        user.photoUrl = pending.photoUrl ?? user.photoUrl;
         user.isGoogleUser = true;
         user.memberSince ??= DateTime.now();
         await _db.updateUser(user);
       }
 
       _pendingGoogle = null;
-      _currentUser   = user;
+      _currentUser = user;
       await _keys.saveLastEmail(email);
       _session.unlockSession();
       _error = null;
@@ -226,7 +280,9 @@ class AuthViewModel extends ChangeNotifier {
     } catch (e) {
       _error = 'Login failed: $e';
       return false;
-    } finally { _setBusy(false); }
+    } finally {
+      _setBusy(false);
+    }
   }
 
   void cancelGoogleOtp() {
@@ -240,20 +296,37 @@ class AuthViewModel extends ChangeNotifier {
   Future<bool> unlockWithBiometrics() async {
     _setBusy(true);
     try {
-      if (!_biometricsAvailable) { _error = 'Biometrics not available.'; return false; }
+      if (!_biometricsAvailable) {
+        _error = 'Biometrics not available.';
+        return false;
+      }
       final lastEmail = await _keys.readLastEmail();
-      if (lastEmail == null)     { _error = 'No previous login found.'; return false; }
+      if (lastEmail == null) {
+        _error = 'No previous login found.';
+        return false;
+      }
       final user = await _db.getUser(lastEmail);
-      if (user == null)          { _error = 'User not found.'; return false; }
-      if (!user.hasLoggedInOnce) { _error = 'Complete one password login first.'; return false; }
+      if (user == null) {
+        _error = 'User not found.';
+        return false;
+      }
+      if (!user.hasLoggedInOnce) {
+        _error = 'Complete one password login first.';
+        return false;
+      }
       if (!user.biometricsEnabled) {
-        _error = 'Enable biometric unlock from profile first.'; return false;
+        _error = 'Enable biometric unlock from profile first.';
+        return false;
       }
       final ok = await _localAuth.authenticate(
-        localizedReason: 'Unlock CipherTask',
-        options: const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
+        localizedReason: 'Unlock SkyFit Pro', // ← UPDATED
+        options:
+            const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
       );
-      if (!ok) { _error = 'Biometric cancelled.'; return false; }
+      if (!ok) {
+        _error = 'Biometric cancelled.';
+        return false;
+      }
       _currentUser = user;
       _session.unlockSession();
       _error = null;
@@ -262,7 +335,9 @@ class AuthViewModel extends ChangeNotifier {
     } catch (_) {
       _error = 'Biometric unlock failed.';
       return false;
-    } finally { _setBusy(false); }
+    } finally {
+      _setBusy(false);
+    }
   }
 
   // ── Profile ────────────────────────────────────────────────────────────────
@@ -271,7 +346,8 @@ class AuthViewModel extends ChangeNotifier {
     if (user == null) return;
     if (!user.hasLoggedInOnce && enabled) {
       _error = 'Login with password at least once before enabling biometrics.';
-      notifyListeners(); return;
+      notifyListeners();
+      return;
     }
     user.biometricsEnabled = enabled;
     await _db.updateUser(user);
@@ -281,18 +357,28 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   Future<void> updatePersonalInfo({
-    String? displayName, String? phone, String? bio,
-    String? location, String? jobTitle, String? birthday,
+    String? displayName,
+    String? phone,
+    String? bio,
+    String? location,
+    String? jobTitle,
+    String? birthday,
+    int? age, // ← ADDED
+    double? weight, // ← ADDED
   }) async {
     final user = _currentUser;
     if (user == null) return;
     if (displayName != null && displayName.trim().isNotEmpty)
       user.displayName = displayName.trim();
-    if (phone    != null) user.phone    = phone.trim().isEmpty    ? null : phone.trim();
-    if (bio      != null) user.bio      = bio.trim().isEmpty      ? null : bio.trim();
-    if (location != null) user.location = location.trim().isEmpty ? null : location.trim();
-    if (jobTitle != null) user.jobTitle = jobTitle.trim().isEmpty ? null : jobTitle.trim();
-    if (birthday != null) user.birthday = birthday.isEmpty        ? null : birthday;
+    if (phone != null) user.phone = phone.trim().isEmpty ? null : phone.trim();
+    if (bio != null) user.bio = bio.trim().isEmpty ? null : bio.trim();
+    if (location != null)
+      user.location = location.trim().isEmpty ? null : location.trim();
+    if (jobTitle != null)
+      user.jobTitle = jobTitle.trim().isEmpty ? null : jobTitle.trim();
+    if (birthday != null) user.birthday = birthday.isEmpty ? null : birthday;
+    if (age != null) user.age = age; // ← ADDED
+    if (weight != null) user.weight = weight; // ← ADDED
     await _db.updateUser(user);
     _currentUser = user;
     notifyListeners();
@@ -321,7 +407,7 @@ class AuthViewModel extends ChangeNotifier {
   // ── Logout ─────────────────────────────────────────────────────────────────
   Future<void> logout() async {
     if (_currentUser?.isGoogleUser == true) await _firebase.signOut();
-    _currentUser   = null;
+    _currentUser = null;
     _pendingGoogle = null;
     _session.lockSession();
     _error = null;
@@ -329,5 +415,8 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   void onSessionTimedOut() => logout();
-  void _setBusy(bool v)    { _busy = v; notifyListeners(); }
+  void _setBusy(bool v) {
+    _busy = v;
+    notifyListeners();
+  }
 }

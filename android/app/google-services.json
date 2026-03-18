@@ -1,26 +1,87 @@
 {
   "project_info": {
-    "project_number": "306940203541",
-    "project_id": "ciphertask-7fb98",
-    "storage_bucket": "ciphertask-7fb98.firebasestorage.app"
+    "project_number": "725416192091",
+    "project_id": "skyfit-pro-635ab",
+    "storage_bucket": "skyfit-pro-635ab.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:306940203541:android:e4225f1a0257c611e6341c",
+        "mobilesdk_app_id": "1:725416192091:android:542b6d2643fe6e99e0777e",
         "android_client_info": {
           "package_name": "com.example.cipher_task"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "725416192091-kssndjmn18gg5bm9chumh373iu1mb1r6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyAUrEj2MwM5cX1g-Bk2MXrtmuV7_5K-Vbw"
+          "current_key": "AIzaSyCWJ1arSqHNin68qtWsk5FO8P0_ufNPGk0"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "725416192091-kssndjmn18gg5bm9chumh373iu1mb1r6.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "725416192091-085f2oe4dq2pugkokg0uabe2rofu9or7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.cipherTask"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:725416192091:android:621b4ff41fa2f238e0777e",
+        "android_client_info": {
+          "package_name": "com.msd5.skyfit_pro"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "725416192091-ss05ng9s4i55jt7khvt9jm1agh9sce8p.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.msd5.skyfit_pro",
+            "certificate_hash": "f4ede92413cfd70cc812c5639adcec4478dc04da"
+          }
+        },
+        {
+          "client_id": "725416192091-kssndjmn18gg5bm9chumh373iu1mb1r6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCWJ1arSqHNin68qtWsk5FO8P0_ufNPGk0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "725416192091-kssndjmn18gg5bm9chumh373iu1mb1r6.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "725416192091-085f2oe4dq2pugkokg0uabe2rofu9or7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.cipherTask"
+              }
+            }
+          ]
         }
       }
     }
