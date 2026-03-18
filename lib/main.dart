@@ -19,6 +19,7 @@ import 'utils/app_theme.dart';
 import 'utils/constants.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/theme_viewmodel.dart';
+import 'viewmodels/weather_viewmodel.dart'; // ← ADDED
 import 'views/login_view.dart';
 
 Future<void> main() async {
@@ -88,6 +89,14 @@ class SkyFitApp extends StatelessWidget {
         Provider<FirebaseAuthService>(create: (_) => FirebaseAuthService()),
         ChangeNotifierProvider<SessionService>.value(value: sessionService),
         ChangeNotifierProvider<ThemeViewModel>.value(value: themeViewModel),
+
+        // ── WeatherViewModel ───────────────────────────────────────────────
+        ChangeNotifierProvider<WeatherViewModel>(
+          // ← ADDED
+          create: (_) => WeatherViewModel(), // ← ADDED
+        ), // ← ADDED
+
+        // ── AuthViewModel ──────────────────────────────────────────────────
         ChangeNotifierProvider<AuthViewModel>(
           create: (ctx) {
             final vm = AuthViewModel(

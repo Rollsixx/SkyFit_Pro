@@ -2,21 +2,55 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class FirebaseAuthService {
-  final FirebaseAuth _auth        = FirebaseAuth.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   User? get currentFirebaseUser => _auth.currentUser;
 
-  // ── Google Sign-In ─────────────────────────────────────────────────────────
+  // ── Email/Password Registration ───────────────────────────────────────────
+  Future<void> registerWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      // ignore: avoid_print
+      print('[FirebaseAuthService] Email registration success: $email');
+    } on FirebaseAuthException catch (e) {
+      // ignore: avoid_print
+      print('[FirebaseAuthService] Registration error: ${e.code}');
+      rethrow;
+    }
+  }
 
+  // ── Email/Password Login ──────────────────────────────────────────────────
+  Future<void> loginWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      // ignore: avoid_print
+      print('[FirebaseAuthService] Email login success: $email');
+    } on FirebaseAuthException catch (e) {
+      // ignore: avoid_print
+      print('[FirebaseAuthService] Login error: ${e.code}');
+      rethrow;
+    }
+  }
+
+  // ── Google Sign-In ─────────────────────────────────────────────────────────
   Future<GoogleSignInResult> signInWithGoogle() async {
     try {
-      // ✅ disconnect() fully revokes the token — forces the account chooser
-      // every single time (signOut() alone doesn't always show the picker)
       try {
         await _googleSignIn.disconnect();
       } catch (_) {
-        // disconnect throws if no account is connected — safe to ignore
         await _googleSignIn.signOut();
       }
       await _auth.signOut();
@@ -29,7 +63,7 @@ class FirebaseAuthService {
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
-        idToken:     googleAuth.idToken,
+        idToken: googleAuth.idToken,
       );
 
       final userCredential = await _auth.signInWithCredential(credential);
@@ -40,10 +74,10 @@ class FirebaseAuthService {
 
       return GoogleSignInResult.success(
         firebaseUser: user,
-        displayName:  user.displayName,
-        email:        user.email ?? googleAccount.email,
-        photoUrl:     user.photoURL,
-        isNewUser:    userCredential.additionalUserInfo?.isNewUser ?? false,
+        displayName: user.displayName,
+        email: user.email ?? googleAccount.email,
+        photoUrl: user.photoURL,
+        isNewUser: userCredential.additionalUserInfo?.isNewUser ?? false,
       );
     } on FirebaseAuthException catch (e) {
       // ignore: avoid_print
@@ -57,7 +91,6 @@ class FirebaseAuthService {
   }
 
   // ── Sign Out ───────────────────────────────────────────────────────────────
-
   Future<void> signOut() async {
     await _auth.signOut();
     try {
@@ -71,15 +104,14 @@ class FirebaseAuthService {
 }
 
 // ── Result type ───────────────────────────────────────────────────────────────
-
 class GoogleSignInResult {
-  final bool    success;
-  final bool    cancelled;
-  final User?   firebaseUser;
+  final bool success;
+  final bool cancelled;
+  final User? firebaseUser;
   final String? displayName;
   final String? email;
   final String? photoUrl;
-  final bool    isNewUser;
+  final bool isNewUser;
   final String? errorMessage;
 
   GoogleSignInResult._({
@@ -94,29 +126,28 @@ class GoogleSignInResult {
   });
 
   factory GoogleSignInResult.success({
-    required User   firebaseUser,
-    String?         displayName,
+    required User firebaseUser,
+    String? displayName,
     required String email,
-    String?         photoUrl,
-    bool            isNewUser = false,
+    String? photoUrl,
+    bool isNewUser = false,
   }) =>
       GoogleSignInResult._(
-        success:      true,
-        cancelled:    false,
+        success: true,
+        cancelled: false,
         firebaseUser: firebaseUser,
-        displayName:  displayName,
-        email:        email,
-        photoUrl:     photoUrl,
-        isNewUser:    isNewUser,
+        displayName: displayName,
+        email: email,
+        photoUrl: photoUrl,
+        isNewUser: isNewUser,
       );
 
   factory GoogleSignInResult.cancelled() =>
       GoogleSignInResult._(success: false, cancelled: true);
 
-  factory GoogleSignInResult.error(String message) =>
-      GoogleSignInResult._(
-        success:      false,
-        cancelled:    false,
+  factory GoogleSignInResult.error(String message) => GoogleSignInResult._(
+        success: false,
+        cancelled: false,
         errorMessage: message,
       );
 }

@@ -9,6 +9,7 @@ import '../models/user_model.dart';
 import '../services/database_service.dart';
 import '../services/email_otp_service.dart';
 import '../services/firebase_auth_service.dart';
+import '../services/firestore_service.dart';
 import '../services/key_storage_service.dart';
 import '../services/session_service.dart';
 
@@ -18,6 +19,7 @@ class AuthViewModel extends ChangeNotifier {
   final SessionService _session;
   final EmailOtpService _otpSvc;
   final FirebaseAuthService _firebase;
+  final FirestoreService _firestore = FirestoreService();
   final LocalAuthentication _localAuth = LocalAuthentication();
 
   UserModel? _currentUser;
@@ -46,7 +48,6 @@ class AuthViewModel extends ChangeNotifier {
   bool get biometricsChecked => _biometricsChecked;
   bool get biometricsAvailable => _biometricsAvailable;
   String? get biometricInfo => _biometricInfo;
-
   bool get pendingGoogleOtp => _pendingGoogle != null;
   String? get pendingGoogleEmail => _pendingGoogle?.email;
 
@@ -131,8 +132,8 @@ class AuthViewModel extends ChangeNotifier {
     required String email,
     required String password,
     required String otpInput,
-    int? age, // ← ADDED
-    double? weight, // ← ADDED
+    int? age,
+    double? weight,
   }) async {
     _setBusy(true);
     try {
@@ -144,15 +145,34 @@ class AuthViewModel extends ChangeNotifier {
       final rnd = Random.secure();
       final salt = List<int>.generate(16, (_) => rnd.nextInt(256));
       final hash = _pbkdf2Hash(password: password, salt: salt);
-      await _db.createUser(UserModel(
+
+      final user = UserModel(
         email: n,
         passwordHash: hash,
         salt: salt,
         hasLoggedInOnce: false,
         memberSince: DateTime.now(),
-        age: age, // ← ADDED
-        weight: weight, // ← ADDED
-      ));
+        age: age,
+        weight: weight,
+      );
+
+      // ── Save to Hive locally ───────────────────────────────────────────
+      await _db.createUser(user);
+
+      // ── Save to Firestore ──────────────────────────────────────────────
+      await _firestore.saveUser(user);
+
+      // ── Register with Firebase Auth ────────────────────────────────────
+      try {
+        await _firebase.registerWithEmail(
+          email: n,
+          password: password,
+        );
+      } catch (e) {
+        // ignore: avoid_print
+        print('[AuthViewModel] Firebase registration note: $e');
+      }
+
       _error = null;
       return true;
     } catch (_) {
@@ -181,10 +201,23 @@ class AuthViewModel extends ChangeNotifier {
         _error = 'Incorrect password.';
         return false;
       }
+
+      // ── Sign in with Firebase Auth ─────────────────────────────────────
+      try {
+        await _firebase.loginWithEmail(
+          email: n,
+          password: password,
+        );
+      } catch (e) {
+        // ignore: avoid_print
+        print('[AuthViewModel] Firebase login note: $e');
+      }
+
       if (!user.hasLoggedInOnce) {
         user.hasLoggedInOnce = true;
         user.memberSince ??= DateTime.now();
         await _db.updateUser(user);
+        await _firestore.saveUser(user); // ← sync to Firestore
       }
       _currentUser = user;
       await _keys.saveLastEmail(n);
@@ -213,7 +246,6 @@ class AuthViewModel extends ChangeNotifier {
         _error = result.errorMessage;
         return false;
       }
-
       _pendingGoogle = result;
       await _otpSvc.generateAndSend(result.email!.toLowerCase().trim());
       _error = null;
@@ -240,7 +272,6 @@ class AuthViewModel extends ChangeNotifier {
         _error = 'Session expired. Try again.';
         return false;
       }
-
       final email = pending.email!.toLowerCase().trim();
       if (!_otpSvc.verify(email, otpInput)) {
         _error = 'Incorrect or expired OTP.';
@@ -260,12 +291,14 @@ class AuthViewModel extends ChangeNotifier {
           memberSince: DateTime.now(),
         );
         await _db.createUser(user);
+        await _firestore.saveUser(user); // ← sync to Firestore
       } else {
         user.displayName = pending.displayName ?? user.displayName;
         user.photoUrl = pending.photoUrl ?? user.photoUrl;
         user.isGoogleUser = true;
         user.memberSince ??= DateTime.now();
         await _db.updateUser(user);
+        await _firestore.saveUser(user); // ← sync to Firestore
       }
 
       _pendingGoogle = null;
@@ -319,7 +352,7 @@ class AuthViewModel extends ChangeNotifier {
         return false;
       }
       final ok = await _localAuth.authenticate(
-        localizedReason: 'Unlock SkyFit Pro', // ← UPDATED
+        localizedReason: 'Unlock SkyFit Pro',
         options:
             const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
       );
@@ -351,6 +384,7 @@ class AuthViewModel extends ChangeNotifier {
     }
     user.biometricsEnabled = enabled;
     await _db.updateUser(user);
+    await _firestore.saveUser(user); // ← sync to Firestore
     _currentUser = user;
     _error = null;
     notifyListeners();
@@ -363,8 +397,8 @@ class AuthViewModel extends ChangeNotifier {
     String? location,
     String? jobTitle,
     String? birthday,
-    int? age, // ← ADDED
-    double? weight, // ← ADDED
+    int? age,
+    double? weight,
   }) async {
     final user = _currentUser;
     if (user == null) return;
@@ -377,9 +411,10 @@ class AuthViewModel extends ChangeNotifier {
     if (jobTitle != null)
       user.jobTitle = jobTitle.trim().isEmpty ? null : jobTitle.trim();
     if (birthday != null) user.birthday = birthday.isEmpty ? null : birthday;
-    if (age != null) user.age = age; // ← ADDED
-    if (weight != null) user.weight = weight; // ← ADDED
+    if (age != null) user.age = age;
+    if (weight != null) user.weight = weight;
     await _db.updateUser(user);
+    await _firestore.saveUser(user); // ← sync to Firestore
     _currentUser = user;
     notifyListeners();
   }
@@ -389,6 +424,7 @@ class AuthViewModel extends ChangeNotifier {
     if (user == null) return;
     user.localPhotoPath = path;
     await _db.updateUser(user);
+    await _firestore.saveUser(user); // ← sync to Firestore
     _currentUser = user;
     notifyListeners();
     // ignore: avoid_print
@@ -400,6 +436,7 @@ class AuthViewModel extends ChangeNotifier {
     if (user == null) return;
     user.localPhotoPath = null;
     await _db.updateUser(user);
+    await _firestore.saveUser(user); // ← sync to Firestore
     _currentUser = user;
     notifyListeners();
   }

@@ -25,7 +25,7 @@ class Constants {
   static const String emailJsPublicKey = 'lLIveH1AUGcxBG4oK';
 
   // ── OpenWeatherMap ─────────────────────────────────────────────────────────
-  static const String weatherApiKey = 'YOUR_OPENWEATHERMAP_API_KEY';
+  static const String weatherApiKey = '8bdae2928bf486003e095bfeb2983d92';
   static const String weatherApiUrl =
       'https://api.openweathermap.org/data/2.5/weather';
 
