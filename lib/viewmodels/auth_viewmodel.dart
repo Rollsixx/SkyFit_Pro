@@ -31,13 +31,11 @@ class AuthViewModel extends ChangeNotifier {
   bool _biometricsAvailable = false;
   String? _biometricInfo;
 
-  // ── Biometric fail counter (resets on success or password login) ───────────
   int _bioFailCount = 0;
   static const int _maxBioFails = 3;
 
   bool get biometricLocked => _bioFailCount >= _maxBioFails;
 
-  // ── Constructor ────────────────────────────────────────────────────────────
   AuthViewModel(
     this._db,
     this._keys,
@@ -46,7 +44,6 @@ class AuthViewModel extends ChangeNotifier {
     this._firebase,
   );
 
-  // ── Getters ────────────────────────────────────────────────────────────────
   UserModel? get currentUser => _currentUser;
   bool get isBusy => _busy;
   String? get error => _error;
@@ -66,6 +63,13 @@ class AuthViewModel extends ChangeNotifier {
 
   // ── Biometrics availability check ──────────────────────────────────────────
   Future<void> checkBiometricsAvailability() async {
+    // Biometrics not supported on web
+    if (kIsWeb) {
+      _biometricsAvailable = false;
+      _biometricsChecked = true;
+      notifyListeners();
+      return;
+    }
     try {
       final supported = await _localAuth.isDeviceSupported();
       final canCheck = await _localAuth.canCheckBiometrics;
@@ -82,9 +86,8 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
-  // ── Check if the last logged-in user has biometrics enabled ────────────────
-  /// Used by LoginView to auto-prompt biometrics on app launch.
   Future<bool> lastUserHasBiometricsEnabled() async {
+    if (kIsWeb) return false;
     try {
       final lastEmail = await _keys.readLastEmail();
       if (lastEmail == null) return false;
@@ -137,10 +140,15 @@ class AuthViewModel extends ChangeNotifier {
         _error = 'Passwords do not match.';
         return false;
       }
-      if (await _db.userExists(n)) {
+
+      // Check both local and Firestore
+      final localExists = await _db.userExists(n);
+      final firestoreExists = await _firestore.userExists(n);
+      if (localExists || firestoreExists) {
         _error = 'User already exists.';
         return false;
       }
+
       await _otpSvc.generateAndSend(n);
       _error = null;
       return true;
@@ -177,13 +185,15 @@ class AuthViewModel extends ChangeNotifier {
         weight: weight,
       );
 
-      // ── Save to Hive locally ───────────────────────────────────────────
-      await _db.createUser(user);
+      // Save locally (skip on web)
+      if (!kIsWeb) {
+        await _db.createUser(user);
+      }
 
-      // ── Save to Firestore ──────────────────────────────────────────────
+      // Always save to Firestore
       await _firestore.saveUser(user);
 
-      // ── Register with Firebase Auth ────────────────────────────────────
+      // Register with Firebase Auth
       try {
         await _firebase.registerWithEmail(
           email: n,
@@ -212,23 +222,104 @@ class AuthViewModel extends ChangeNotifier {
     _setBusy(true);
     try {
       final n = email.toLowerCase().trim();
-      final user = await _db.getUser(n);
-      if (user == null) {
-        _error = 'User not found.';
-        return false;
-      }
-      if (!_constantTimeEquals(_pbkdf2Hash(password: password, salt: user.salt),
-          user.passwordHash)) {
-        _error = 'Incorrect password.';
-        return false;
+
+      // ── Web login — use Firebase Auth directly ─────────────────────────
+      if (kIsWeb) {
+        try {
+          await _firebase.loginWithEmail(email: n, password: password);
+        } catch (e) {
+          _error = 'Incorrect email or password.';
+          return false;
+        }
+
+        // Load user profile from Firestore
+        final firestoreData = await _firestore.getUser(n);
+        UserModel user;
+        if (firestoreData != null) {
+          user = UserModel(
+            email: n,
+            passwordHash: [],
+            salt: [],
+            hasLoggedInOnce: true,
+            displayName: firestoreData['displayName'] as String?,
+            photoUrl: firestoreData['photoUrl'] as String?,
+            isGoogleUser: firestoreData['isGoogleUser'] as bool? ?? false,
+            memberSince: firestoreData['memberSince'] != null
+                ? DateTime.tryParse(firestoreData['memberSince'])
+                : null,
+            age: firestoreData['age'] as int?,
+            weight: (firestoreData['weight'] as num?)?.toDouble(),
+            biometricsEnabled:
+                firestoreData['biometricsEnabled'] as bool? ?? false,
+          );
+        } else {
+          // Create basic user if Firestore doesn't have profile yet
+          user = UserModel(
+            email: n,
+            passwordHash: [],
+            salt: [],
+            hasLoggedInOnce: true,
+            memberSince: DateTime.now(),
+          );
+          await _firestore.saveUser(user);
+        }
+
+        _currentUser = user;
+        _bioFailCount = 0;
+        _session.unlockSession();
+        _error = null;
+        notifyListeners();
+        return true;
       }
 
-      // ── Sign in with Firebase Auth ─────────────────────────────────────
-      try {
-        await _firebase.loginWithEmail(
+      // ── Mobile login — use local Hive + PBKDF2 ─────────────────────────
+      UserModel? user = await _db.getUser(n);
+
+      // If not found locally, check Firestore
+      if (user == null) {
+        final firestoreData = await _firestore.getUser(n);
+        if (firestoreData == null) {
+          _error = 'User not found.';
+          return false;
+        }
+        // User exists in Firestore but not locally
+        // Use Firebase Auth to verify password
+        try {
+          await _firebase.loginWithEmail(email: n, password: password);
+        } catch (e) {
+          _error = 'Incorrect password.';
+          return false;
+        }
+        user = UserModel(
           email: n,
-          password: password,
+          passwordHash: [],
+          salt: [],
+          hasLoggedInOnce: true,
+          displayName: firestoreData['displayName'] as String?,
+          photoUrl: firestoreData['photoUrl'] as String?,
+          isGoogleUser: firestoreData['isGoogleUser'] as bool? ?? false,
+          memberSince: firestoreData['memberSince'] != null
+              ? DateTime.tryParse(firestoreData['memberSince'])
+              : null,
+          age: firestoreData['age'] as int?,
+          weight: (firestoreData['weight'] as num?)?.toDouble(),
+          biometricsEnabled:
+              firestoreData['biometricsEnabled'] as bool? ?? false,
         );
+        await _db.createUser(user);
+      } else {
+        // Verify password locally with PBKDF2
+        if (!_constantTimeEquals(
+            _pbkdf2Hash(password: password, salt: user.salt),
+            user.passwordHash)) {
+          _error = 'Incorrect password.';
+          return false;
+        }
+      }
+
+      // Firebase Auth sign in
+      try {
+        await _firebase.loginWithEmail(email: n, password: password);
       } catch (e) {
         // ignore: avoid_print
         print('[AuthViewModel] Firebase login note: $e');
@@ -240,9 +331,9 @@ class AuthViewModel extends ChangeNotifier {
         await _db.updateUser(user);
         await _firestore.saveUser(user);
       }
+
       _currentUser = user;
-      _bioFailCount =
-          0; // ← reset bio fail counter on successful password login
+      _bioFailCount = 0;
       await _keys.saveLastEmail(n);
       _session.unlockSession();
       _error = null;
@@ -301,7 +392,7 @@ class AuthViewModel extends ChangeNotifier {
         return false;
       }
 
-      UserModel? user = await _db.getUser(email);
+      UserModel? user = kIsWeb ? null : await _db.getUser(email);
       if (user == null) {
         user = UserModel(
           email: email,
@@ -313,21 +404,21 @@ class AuthViewModel extends ChangeNotifier {
           isGoogleUser: true,
           memberSince: DateTime.now(),
         );
-        await _db.createUser(user);
+        if (!kIsWeb) await _db.createUser(user);
         await _firestore.saveUser(user);
       } else {
         user.displayName = pending.displayName ?? user.displayName;
         user.photoUrl = pending.photoUrl ?? user.photoUrl;
         user.isGoogleUser = true;
         user.memberSince ??= DateTime.now();
-        await _db.updateUser(user);
+        if (!kIsWeb) await _db.updateUser(user);
         await _firestore.saveUser(user);
       }
 
       _pendingGoogle = null;
       _currentUser = user;
-      _bioFailCount = 0; // ← reset on successful Google login
-      await _keys.saveLastEmail(email);
+      _bioFailCount = 0;
+      if (!kIsWeb) await _keys.saveLastEmail(email);
       _session.unlockSession();
       _error = null;
       notifyListeners();
@@ -349,16 +440,18 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Biometric Unlock (with 3-fail lockout) ─────────────────────────────────
+  // ── Biometric Unlock ───────────────────────────────────────────────────────
   Future<bool> unlockWithBiometrics() async {
+    if (kIsWeb) {
+      _error = 'Biometrics not available on web.';
+      return false;
+    }
     _setBusy(true);
     try {
-      // ── Already locked out ─────────────────────────────────────────────
       if (biometricLocked) {
         _error = 'Too many failed attempts. Please use your password.';
         return false;
       }
-
       if (!_biometricsAvailable) {
         _error = 'Biometrics not available on this device.';
         return false;
@@ -389,7 +482,6 @@ class AuthViewModel extends ChangeNotifier {
       );
 
       if (!ok) {
-        // ── Increment fail counter ───────────────────────────────────────
         _bioFailCount++;
         final remaining = _maxBioFails - _bioFailCount;
         if (biometricLocked) {
@@ -403,7 +495,6 @@ class AuthViewModel extends ChangeNotifier {
         return false;
       }
 
-      // ── Success ───────────────────────────────────────────────────────
       _bioFailCount = 0;
       _currentUser = user;
       _session.unlockSession();
@@ -420,7 +511,6 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
-  // ── Reset bio fail counter (called when user switches to password manually) ─
   void resetBioFailCount() {
     _bioFailCount = 0;
     _error = null;
@@ -437,7 +527,7 @@ class AuthViewModel extends ChangeNotifier {
       return;
     }
     user.biometricsEnabled = enabled;
-    await _db.updateUser(user);
+    if (!kIsWeb) await _db.updateUser(user);
     await _firestore.saveUser(user);
     _currentUser = user;
     _error = null;
@@ -456,18 +546,21 @@ class AuthViewModel extends ChangeNotifier {
   }) async {
     final user = _currentUser;
     if (user == null) return;
-    if (displayName != null && displayName.trim().isNotEmpty)
+    if (displayName != null && displayName.trim().isNotEmpty) {
       user.displayName = displayName.trim();
+    }
     if (phone != null) user.phone = phone.trim().isEmpty ? null : phone.trim();
     if (bio != null) user.bio = bio.trim().isEmpty ? null : bio.trim();
-    if (location != null)
+    if (location != null) {
       user.location = location.trim().isEmpty ? null : location.trim();
-    if (jobTitle != null)
+    }
+    if (jobTitle != null) {
       user.jobTitle = jobTitle.trim().isEmpty ? null : jobTitle.trim();
+    }
     if (birthday != null) user.birthday = birthday.isEmpty ? null : birthday;
     if (age != null) user.age = age;
     if (weight != null) user.weight = weight;
-    await _db.updateUser(user);
+    if (!kIsWeb) await _db.updateUser(user);
     await _firestore.saveUser(user);
     _currentUser = user;
     notifyListeners();
@@ -477,19 +570,17 @@ class AuthViewModel extends ChangeNotifier {
     final user = _currentUser;
     if (user == null) return;
     user.localPhotoPath = path;
-    await _db.updateUser(user);
+    if (!kIsWeb) await _db.updateUser(user);
     await _firestore.saveUser(user);
     _currentUser = user;
     notifyListeners();
-    // ignore: avoid_print
-    print('[AuthViewModel] Local photo updated: $path');
   }
 
   Future<void> removeLocalPhoto() async {
     final user = _currentUser;
     if (user == null) return;
     user.localPhotoPath = null;
-    await _db.updateUser(user);
+    if (!kIsWeb) await _db.updateUser(user);
     await _firestore.saveUser(user);
     _currentUser = user;
     notifyListeners();
@@ -500,13 +591,14 @@ class AuthViewModel extends ChangeNotifier {
     if (_currentUser?.isGoogleUser == true) await _firebase.signOut();
     _currentUser = null;
     _pendingGoogle = null;
-    _bioFailCount = 0; // ← reset on logout
+    _bioFailCount = 0;
     _session.lockSession();
     _error = null;
     notifyListeners();
   }
 
   void onSessionTimedOut() => logout();
+
   void _setBusy(bool v) {
     _busy = v;
     notifyListeners();
