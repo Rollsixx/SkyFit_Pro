@@ -4,6 +4,7 @@ class ActivityModel {
   final String intensity; // Low, Moderate, High
   final String icon; // emoji
   final String duration; // e.g. "30-45 mins"
+  final String? videoUrl; // YouTube embed or direct video URL
 
   const ActivityModel({
     required this.title,
@@ -11,6 +12,7 @@ class ActivityModel {
     required this.intensity,
     required this.icon,
     required this.duration,
+    this.videoUrl,
   });
 }
 
@@ -40,6 +42,8 @@ class ActivitySuggestionEngine {
         intensity: 'Low',
         icon: '🏠',
         duration: '20-30 mins',
+        videoUrl:
+            'https://www.youtube.com/embed/g_tea8ZNk5A', // Gentle stretching
       );
     }
 
@@ -53,6 +57,7 @@ class ActivitySuggestionEngine {
           intensity: 'Low',
           icon: '🧘',
           duration: '20-30 mins',
+          videoUrl: 'https://www.youtube.com/embed/KEjiXUZOvh0', // Chair yoga
         );
       }
       if (isOverweight) {
@@ -63,6 +68,8 @@ class ActivitySuggestionEngine {
           intensity: 'Moderate',
           icon: '💪',
           duration: '30-40 mins',
+          videoUrl:
+              'https://www.youtube.com/embed/ml6cT4AZdqI', // Low impact workout
         );
       }
       return const ActivityModel(
@@ -72,6 +79,8 @@ class ActivitySuggestionEngine {
         intensity: 'Moderate',
         icon: '🏋️',
         duration: '30-45 mins',
+        videoUrl:
+            'https://www.youtube.com/embed/UItWltVZZmE', // Full body workout
       );
     }
 
@@ -85,6 +94,8 @@ class ActivitySuggestionEngine {
           intensity: 'Low',
           icon: '🏊',
           duration: '30-45 mins',
+          videoUrl:
+              'https://www.youtube.com/embed/zh-VDMKdNpQ', // Swimming workout
         );
       }
       return const ActivityModel(
@@ -94,6 +105,8 @@ class ActivitySuggestionEngine {
         intensity: 'Moderate',
         icon: '🌅',
         duration: '30-40 mins',
+        videoUrl:
+            'https://www.youtube.com/embed/kZDvg92tTMc', // Morning run tips
       );
     }
 
@@ -107,6 +120,7 @@ class ActivitySuggestionEngine {
           intensity: 'Low',
           icon: '🌳',
           duration: '30-45 mins',
+          videoUrl: 'https://www.youtube.com/embed/cEOS_zanycs', // Tai Chi
         );
       }
       if (isOverweight) {
@@ -117,6 +131,8 @@ class ActivitySuggestionEngine {
           intensity: 'Moderate',
           icon: '🚶',
           duration: '30-45 mins',
+          videoUrl:
+              'https://www.youtube.com/embed/njeZ29umqVE', // Brisk walk workout
         );
       }
       return const ActivityModel(
@@ -126,6 +142,7 @@ class ActivitySuggestionEngine {
         intensity: 'High',
         icon: '🏃',
         duration: '30-45 mins',
+        videoUrl: 'https://www.youtube.com/embed/ml6cT4AZdqI', // HIIT workout
       );
     }
 
@@ -138,6 +155,7 @@ class ActivitySuggestionEngine {
         intensity: 'Low',
         icon: '🚶',
         duration: '20-30 mins',
+        videoUrl: 'https://www.youtube.com/embed/g_tea8ZNk5A', // Stretching
       );
     }
     return const ActivityModel(
@@ -147,6 +165,7 @@ class ActivitySuggestionEngine {
       intensity: 'Moderate',
       icon: '🚴',
       duration: '30-45 mins',
+      videoUrl: 'https://www.youtube.com/embed/kZDvg92tTMc', // Cycling/jogging
     );
   }
 }

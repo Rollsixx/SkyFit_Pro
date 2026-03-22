@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'env_config.dart';
 
 class Constants {
-  // App name
+  // ── App name ───────────────────────────────────────────────────────────────
   static const String appName = 'SkyFit Pro';
+
   // ── Session ────────────────────────────────────────────────────────────────
   static const int inactivityTimeoutSeconds = 120;
   static const int sessionWarningSeconds = 30;
@@ -13,21 +15,19 @@ class Constants {
 
   // ── Hive Boxes ─────────────────────────────────────────────────────────────
   static const String usersBox = 'skyfit_users_box_v1';
-  //static const String todosBox = 'cipher_todos_box_v1';
 
   // ── Crypto Labels ──────────────────────────────────────────────────────────
   static const String fieldKeyLabel = 'SKYFIT_FIELD_KEY_V1';
   static const String aesGcmPayloadVersion = 'v1';
 
-  // ── EmailJS ────────────────────────────────────────────────────────────────
-  static const String emailJsServiceId = 'service_vqyyrco';
-  static const String emailJsTemplateId = 'template_5bel3d3';
-  static const String emailJsPublicKey = 'lLIveH1AUGcxBG4oK';
+  // ── EmailJS — sourced from EnvConfig (--dart-define at build time) ─────────
+  static String get emailJsServiceId => EnvConfig.emailJsServiceId;
+  static String get emailJsTemplateId => EnvConfig.emailJsTemplateId;
+  static String get emailJsPublicKey => EnvConfig.emailJsPublicKey;
 
-  // ── OpenWeatherMap ─────────────────────────────────────────────────────────
-  static const String weatherApiKey = '8bdae2928bf486003e095bfeb2983d92';
-  static const String weatherApiUrl =
-      'https://api.openweathermap.org/data/2.5/weather';
+  // ── OpenWeatherMap — sourced from EnvConfig ────────────────────────────────
+  static String get weatherApiKey => EnvConfig.openWeatherApiKey;
+  static String get weatherApiUrl => EnvConfig.openWeatherApiUrl;
 
   // ── Navigation / UI ────────────────────────────────────────────────────────
   static final GlobalKey<NavigatorState> navigatorKey =

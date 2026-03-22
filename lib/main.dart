@@ -17,13 +17,17 @@ import 'services/key_storage_service.dart';
 import 'services/session_service.dart';
 import 'utils/app_theme.dart';
 import 'utils/constants.dart';
+import 'utils/env_config.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/theme_viewmodel.dart';
-import 'viewmodels/weather_viewmodel.dart'; // ← ADDED
+import 'viewmodels/weather_viewmodel.dart';
 import 'views/login_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ── Assert all required --dart-define keys are present (debug only) ─────────
+  EnvConfig.assertKeysPresent();
 
   try {
     await ScreenProtector.preventScreenshotOn();
@@ -90,13 +94,12 @@ class SkyFitApp extends StatelessWidget {
         ChangeNotifierProvider<SessionService>.value(value: sessionService),
         ChangeNotifierProvider<ThemeViewModel>.value(value: themeViewModel),
 
-        // ── WeatherViewModel ───────────────────────────────────────────────
+        // ── WeatherViewModel ─────────────────────────────────────────────────
         ChangeNotifierProvider<WeatherViewModel>(
-          // ← ADDED
-          create: (_) => WeatherViewModel(), // ← ADDED
-        ), // ← ADDED
+          create: (_) => WeatherViewModel(),
+        ),
 
-        // ── AuthViewModel ──────────────────────────────────────────────────
+        // ── AuthViewModel ────────────────────────────────────────────────────
         ChangeNotifierProvider<AuthViewModel>(
           create: (ctx) {
             final vm = AuthViewModel(

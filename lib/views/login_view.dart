@@ -6,7 +6,7 @@ import '../utils/constants.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../viewmodels/theme_viewmodel.dart';
 import 'register_view.dart';
-import 'home_view.dart'; // ← CHANGED
+import 'home_view.dart';
 
 class LoginView extends StatefulWidget {
   const LoginView({super.key});
@@ -20,11 +20,29 @@ class _LoginViewState extends State<LoginView> {
   final _otpCtrl = TextEditingController();
   bool _obscure = true;
 
+  // ── Tracks whether we already auto-prompted biometrics this session ─────────
+  bool _biometricAutoPrompted = false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AuthViewModel>().checkBiometricsAvailability();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final auth = context.read<AuthViewModel>();
+
+      // 1. Check hardware availability
+      await auth.checkBiometricsAvailability();
+
+      // 2. If hardware available AND last user had biometrics enabled,
+      //    auto-prompt without waiting for button tap
+      if (!_biometricAutoPrompted &&
+          auth.biometricsAvailable &&
+          !auth.biometricLocked) {
+        final shouldPrompt = await auth.lastUserHasBiometricsEnabled();
+        if (shouldPrompt && mounted) {
+          _biometricAutoPrompted = true;
+          await _bioUnlock(autoPrompt: true);
+        }
+      }
     });
   }
 
@@ -39,20 +57,22 @@ class _LoginViewState extends State<LoginView> {
   void _snack(String msg) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
-  void _goHome() => Navigator.of(context).pushReplacement(// ← CHANGED
-      MaterialPageRoute(builder: (_) => const HomeView())); // ← CHANGED
+  void _goHome() => Navigator.of(context)
+      .pushReplacement(MaterialPageRoute(builder: (_) => const HomeView()));
 
   // ── Password login ─────────────────────────────────────────────────────────
   Future<void> _login() async {
     final auth = context.read<AuthViewModel>();
     auth.clearError();
+    // Reset bio fail counter when user chooses to use password
+    auth.resetBioFailCount();
     final ok = await auth.loginWithPassword(
         email: _email.text, password: _password.text);
     if (!mounted) return;
     if (ok)
       _goHome();
     else
-      _snack(auth.error ?? 'Login failed'); // ← CHANGED
+      _snack(auth.error ?? 'Login failed');
   }
 
   // ── Google login ───────────────────────────────────────────────────────────
@@ -151,7 +171,7 @@ class _LoginViewState extends State<LoginView> {
                       if (!mounted) return;
                       if (ok2) {
                         Navigator.pop(ctx);
-                        _goHome(); // ← CHANGED
+                        _goHome();
                       } else {
                         _snack(vm.error ?? 'Invalid OTP');
                       }
@@ -172,15 +192,23 @@ class _LoginViewState extends State<LoginView> {
   }
 
   // ── Biometric unlock ───────────────────────────────────────────────────────
-  Future<void> _bioUnlock() async {
+  /// [autoPrompt] = true means this was triggered automatically on launch,
+  /// not by the user tapping the button. If it fails silently, we don't
+  /// lock the user out — they simply see the normal login form.
+  Future<void> _bioUnlock({bool autoPrompt = false}) async {
     final auth = context.read<AuthViewModel>();
     auth.clearError();
     final ok = await auth.unlockWithBiometrics();
     if (!mounted) return;
-    if (ok)
+    if (ok) {
       _goHome();
-    else
-      _snack(auth.error ?? 'Biometric failed'); // ← CHANGED
+    } else {
+      final msg = auth.error ?? 'Biometric failed';
+      // Only show snackbar if user intentionally tapped the button
+      if (!autoPrompt) _snack(msg);
+      // Force a rebuild so the UI reflects the new fail count / lock state
+      setState(() {});
+    }
   }
 
   @override
@@ -188,7 +216,9 @@ class _LoginViewState extends State<LoginView> {
     final auth = context.watch<AuthViewModel>();
     final themeVm = context.watch<ThemeViewModel>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bioOk = auth.biometricsChecked && auth.biometricsAvailable;
+    final bioOk = auth.biometricsChecked &&
+        auth.biometricsAvailable &&
+        !auth.biometricLocked;
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -201,211 +231,247 @@ class _LoginViewState extends State<LoginView> {
               color: cs.primary.withOpacity(isDark ? 0.25 : 0.12), size: 260),
         ),
         Positioned(
-          bottom: -60,
-          left: -40,
+          bottom: -100,
+          left: -80,
           child: _Blob(
-              color: cs.secondary.withOpacity(isDark ? 0.20 : 0.10), size: 200),
+              color: cs.secondary.withOpacity(isDark ? 0.2 : 0.10), size: 300),
         ),
 
+        // ── Theme toggle ──────────────────────────────────────────────────
+        Positioned(
+          top: 48,
+          right: 16,
+          child: IconButton(
+            icon: Icon(
+                isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+            onPressed: themeVm.toggle,
+          ),
+        ),
+
+        // ── Main content ──────────────────────────────────────────────────
         SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 400),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Theme toggle
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: IconButton(
-                        icon: Icon(isDark
-                            ? Icons.light_mode_outlined
-                            : Icons.dark_mode_outlined),
-                        onPressed: themeVm.toggle,
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ── Logo ───────────────────────────────────────────────
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [cs.primary, cs.secondary],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: cs.primary.withOpacity(0.4),
+                          blurRadius: 20,
+                          spreadRadius: 2,
+                        )
+                      ],
+                    ),
+                    child: const Icon(Icons.fitness_center_rounded,
+                        size: 36, color: Colors.white),
+                  ).animate().scale(duration: 500.ms, curve: Curves.elasticOut),
+
+                  const SizedBox(height: 16),
+
+                  // ── App name ───────────────────────────────────────────
+                  Text('SkyFit Pro',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5))
+                      .animate()
+                      .fadeIn(delay: 100.ms),
+                  Text('Your personal health companion',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium)
+                      .animate()
+                      .fadeIn(delay: 200.ms),
+
+                  const SizedBox(height: 32),
+
+                  // ── Email ──────────────────────────────────────────────
+                  TextField(
+                    controller: _email,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      prefixIcon: Icon(Icons.alternate_email_rounded),
+                    ),
+                  ).animate().fadeIn(delay: 250.ms),
+
+                  const SizedBox(height: 14),
+
+                  // ── Password ───────────────────────────────────────────
+                  TextField(
+                    controller: _password,
+                    obscureText: _obscure,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined),
+                        onPressed: () => setState(() => _obscure = !_obscure),
                       ),
                     ),
+                  ).animate().fadeIn(delay: 300.ms),
 
-                    // ── Logo ───────────────────────────────────────────────
-                    Center(
-                      child: Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [cs.primary, cs.secondary],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: cs.primary.withOpacity(0.4),
-                              blurRadius: 20,
-                              spreadRadius: 2,
-                            )
-                          ],
-                        ),
-                        child: const Icon(
-                            Icons.fitness_center_rounded, // ← CHANGED
-                            size: 36,
-                            color: Colors.white),
-                      ),
-                    )
-                        .animate()
-                        .scale(duration: 500.ms, curve: Curves.elasticOut),
+                  const SizedBox(height: 22),
 
-                    const SizedBox(height: 16),
-
-                    // ── App name ───────────────────────────────────────────
-                    Text('SkyFit Pro', // ← CHANGED
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineMedium
-                                ?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 1.5))
-                        .animate()
-                        .fadeIn(delay: 100.ms),
-                    Text('Your personal health companion', // ← CHANGED
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodyMedium)
-                        .animate()
-                        .fadeIn(delay: 200.ms),
-
-                    const SizedBox(height: 32),
-
-                    // ── Email ──────────────────────────────────────────────
-                    TextField(
-                      controller: _email,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.alternate_email_rounded),
-                      ),
-                    ).animate().fadeIn(delay: 250.ms),
-
-                    const SizedBox(height: 14),
-
-                    // ── Password ───────────────────────────────────────────
-                    TextField(
-                      controller: _password,
-                      obscureText: _obscure,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline_rounded),
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscure
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined),
-                          onPressed: () => setState(() => _obscure = !_obscure),
-                        ),
-                      ),
-                    ).animate().fadeIn(delay: 300.ms),
-
-                    const SizedBox(height: 22),
-
-                    // ── Sign In ────────────────────────────────────────────
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: auth.isBusy ? null : _login,
-                        icon: const Icon(Icons.login_rounded),
-                        label: auth.isBusy
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white))
-                            : const Text('Sign In'),
-                      ),
-                    ).animate().fadeIn(delay: 350.ms),
-
-                    const SizedBox(height: 12),
-
-                    // ── OR divider ─────────────────────────────────────────
-                    Row(children: [
-                      Expanded(
-                          child: Divider(
-                              color: isDark ? Colors.white24 : Colors.black26)),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text('or',
-                            style: TextStyle(
-                                color: isDark ? Colors.white38 : Colors.black38,
-                                fontSize: 13)),
-                      ),
-                      Expanded(
-                          child: Divider(
-                              color: isDark ? Colors.white24 : Colors.black26)),
-                    ]),
-
-                    const SizedBox(height: 12),
-
-                    // ── Google ─────────────────────────────────────────────
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: auth.isBusy ? null : _googleLogin,
-                        icon: Image.network(
-                          'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
-                          height: 18,
-                          width: 18,
-                          errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.g_mobiledata_rounded, size: 22),
-                        ),
-                        label: const Text('Continue with Google'),
-                      ),
-                    ).animate().fadeIn(delay: 400.ms),
-
-                    const SizedBox(height: 10),
-
-                    // ── Biometrics ─────────────────────────────────────────
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: (auth.isBusy || !bioOk) ? null : _bioUnlock,
-                        icon: const Icon(Icons.fingerprint_rounded),
-                        label: Text(bioOk
-                            ? 'Unlock with Fingerprint'
-                            : 'Fingerprint not available'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor:
-                              isDark ? Colors.white60 : Colors.black54,
-                          side: BorderSide(
-                              color: isDark ? Colors.white24 : Colors.black26),
-                        ),
-                      ),
-                    ).animate().fadeIn(delay: 440.ms),
-
-                    const SizedBox(height: 20),
-
-                    // ── Register link ──────────────────────────────────────
-                    Center(
-                      child: TextButton(
-                        onPressed: auth.isBusy
-                            ? null
-                            : () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                    builder: (_) => const RegisterView())),
-                        child: Text("Don't have an account? Create one",
-                            style: TextStyle(color: cs.secondary)),
-                      ),
-                    ).animate().fadeIn(delay: 480.ms),
-
-                    const SizedBox(height: 8),
-                    Text(
-                      'Auto-lock after '
-                      '${Constants.inactivityTimeoutSeconds}s of inactivity',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.white24 : Colors.black26),
+                  // ── Sign In ────────────────────────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: auth.isBusy ? null : _login,
+                      icon: const Icon(Icons.login_rounded),
+                      label: auth.isBusy
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : const Text('Sign In'),
                     ),
-                  ],
-                ),
+                  ).animate().fadeIn(delay: 350.ms),
+
+                  const SizedBox(height: 12),
+
+                  // ── OR divider ─────────────────────────────────────────
+                  Row(children: [
+                    Expanded(
+                        child: Divider(
+                            color: isDark ? Colors.white24 : Colors.black26)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text('or',
+                          style: TextStyle(
+                              color: isDark ? Colors.white38 : Colors.black38,
+                              fontSize: 13)),
+                    ),
+                    Expanded(
+                        child: Divider(
+                            color: isDark ? Colors.white24 : Colors.black26)),
+                  ]),
+
+                  const SizedBox(height: 12),
+
+                  // ── Google ─────────────────────────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: auth.isBusy ? null : _googleLogin,
+                      icon: Image.network(
+                        'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+                        height: 18,
+                        width: 18,
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.g_mobiledata_rounded, size: 22),
+                      ),
+                      label: const Text('Continue with Google'),
+                    ),
+                  ).animate().fadeIn(delay: 400.ms),
+
+                  const SizedBox(height: 10),
+
+                  // ── Biometrics button ──────────────────────────────────
+                  // Shows LOCKED state when bio fails >= 3
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed:
+                          (auth.isBusy || !bioOk) ? null : () => _bioUnlock(),
+                      icon: Icon(
+                        auth.biometricLocked
+                            ? Icons.lock_rounded
+                            : Icons.fingerprint_rounded,
+                      ),
+                      label: Text(
+                        auth.biometricLocked
+                            ? 'Biometrics locked — use password'
+                            : !auth.biometricsChecked
+                                ? 'Checking biometrics...'
+                                : !auth.biometricsAvailable
+                                    ? 'Fingerprint not available'
+                                    : auth.bioFailCount > 0
+                                        ? 'Retry Fingerprint '
+                                            '(${auth.maxBioFails - auth.bioFailCount} left)'
+                                        : 'Unlock with Fingerprint',
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: auth.biometricLocked
+                            ? Colors.red
+                            : isDark
+                                ? Colors.white60
+                                : Colors.black54,
+                        side: BorderSide(
+                          color: auth.biometricLocked
+                              ? Colors.red.withOpacity(0.5)
+                              : isDark
+                                  ? Colors.white24
+                                  : Colors.black26,
+                        ),
+                      ),
+                    ),
+                  ).animate().fadeIn(delay: 440.ms),
+
+                  // ── Bio fail warning ───────────────────────────────────
+                  if (auth.bioFailCount > 0 && !auth.biometricLocked)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        '⚠️  ${auth.bioFailCount}/${auth.maxBioFails} failed attempts',
+                        style:
+                            const TextStyle(fontSize: 12, color: Colors.orange),
+                        textAlign: TextAlign.center,
+                      ),
+                    ).animate().fadeIn(),
+
+                  if (auth.biometricLocked)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        '🔒  Biometrics locked. Use your password to sign in.',
+                        style: const TextStyle(fontSize: 12, color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                    ).animate().fadeIn(),
+
+                  const SizedBox(height: 20),
+
+                  // ── Register link ──────────────────────────────────────
+                  Center(
+                    child: TextButton(
+                      onPressed: auth.isBusy
+                          ? null
+                          : () => Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) => const RegisterView())),
+                      child: Text("Don't have an account? Create one",
+                          style: TextStyle(color: cs.secondary)),
+                    ),
+                  ).animate().fadeIn(delay: 480.ms),
+
+                  const SizedBox(height: 8),
+                  Text(
+                    'Auto-lock after '
+                    '${Constants.inactivityTimeoutSeconds}s of inactivity',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? Colors.white24 : Colors.black26),
+                  ),
+                ],
               ),
             ),
           ),

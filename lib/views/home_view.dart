@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/activity_model.dart';
 import '../models/weather_model.dart';
@@ -222,86 +223,103 @@ class _WeatherCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(children: [
-                Text(weather.weatherEmoji,
-                    style: const TextStyle(fontSize: 36)),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(weather.cityName,
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w800)),
-                    Text(weather.description.toUpperCase(),
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white54 : Colors.black45,
-                            letterSpacing: 1)),
-                  ],
-                ),
-              ]),
-              Text('${weather.temperature.round()}°C',
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  '${weather.temperature.toStringAsFixed(1)}°C',
                   style: TextStyle(
-                      fontSize: 36,
+                      fontSize: 40,
                       fontWeight: FontWeight.w900,
-                      color: cs.primary)),
+                      color: cs.primary),
+                ),
+                Text(weather.condition,
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white70 : Colors.black54)),
+                Text(weather.cityName,
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.white38 : Colors.black38)),
+              ]),
+              Text(
+                _weatherEmoji(weather.condition),
+                style: const TextStyle(fontSize: 56),
+              ),
             ],
           ),
           const SizedBox(height: 16),
-          const Divider(),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _WeatherStat(
-                icon: Icons.thermostat_rounded,
-                label: 'Feels Like',
-                value: '${weather.feelsLike.round()}°C',
-                color: Colors.orange,
-              ),
-              _WeatherStat(
-                icon: Icons.water_drop_rounded,
-                label: 'Humidity',
-                value: '${weather.humidity}%',
-                color: Colors.blue,
-              ),
-              _WeatherStat(
+          Row(children: [
+            _WeatherChip(
+                icon: Icons.water_drop_outlined,
+                label: '${weather.humidity}%',
+                hint: 'Humidity'),
+            const SizedBox(width: 8),
+            _WeatherChip(
                 icon: Icons.air_rounded,
-                label: 'Wind',
-                value: '${weather.windSpeed.toStringAsFixed(1)} m/s',
-                color: Colors.teal,
-              ),
-            ],
-          ),
+                label: '${weather.windSpeed.toStringAsFixed(1)} m/s',
+                hint: 'Wind'),
+            const SizedBox(width: 8),
+            _WeatherChip(
+                icon: Icons.thermostat_rounded,
+                label: '${weather.feelsLike.toStringAsFixed(1)}°C',
+                hint: 'Feels like'),
+          ]),
         ],
       ),
     );
   }
+
+  String _weatherEmoji(String condition) {
+    switch (condition) {
+      case 'Clear':
+        return '☀️';
+      case 'Clouds':
+        return '☁️';
+      case 'Rain':
+      case 'Drizzle':
+        return '🌧️';
+      case 'Snow':
+        return '❄️';
+      case 'Thunderstorm':
+        return '⛈️';
+      case 'Mist':
+      case 'Fog':
+      case 'Haze':
+        return '🌫️';
+      default:
+        return '🌤️';
+    }
+  }
 }
 
-// ── Weather Stat ──────────────────────────────────────────────────────────────
-class _WeatherStat extends StatelessWidget {
+class _WeatherChip extends StatelessWidget {
   final IconData icon;
   final String label;
-  final String value;
-  final Color color;
-  const _WeatherStat({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
+  final String hint;
+  const _WeatherChip(
+      {required this.icon, required this.label, required this.hint});
 
   @override
-  Widget build(BuildContext context) => Column(children: [
-        Icon(icon, color: color, size: 22),
-        const SizedBox(height: 4),
-        Text(value,
-            style: TextStyle(
-                fontSize: 14, fontWeight: FontWeight.w700, color: color)),
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-      ]);
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Tooltip(
+      message: hint,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white10 : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border:
+              Border.all(color: isDark ? Colors.white12 : Colors.blue.shade100),
+        ),
+        child: Row(children: [
+          Icon(icon, size: 14, color: Colors.blue),
+          const SizedBox(width: 4),
+          Text(label, style: const TextStyle(fontSize: 12)),
+        ]),
+      ),
+    );
+  }
 }
 
 // ── Activity Card ─────────────────────────────────────────────────────────────
@@ -330,7 +348,6 @@ class _ActivityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? Colors.white10 : Colors.green.shade50,
         borderRadius: BorderRadius.circular(16),
@@ -341,62 +358,217 @@ class _ActivityCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Text(activity.icon, style: const TextStyle(fontSize: 36)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(activity.title,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
-                  Row(children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _intensityColor.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(20),
-                        border:
-                            Border.all(color: _intensityColor.withOpacity(0.4)),
-                      ),
-                      child: Text(activity.intensity,
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: _intensityColor)),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.timer_outlined,
-                            size: 11, color: Colors.grey),
-                        const SizedBox(width: 3),
-                        Text(activity.duration,
+          // ── Activity info ──────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Text(activity.icon, style: const TextStyle(fontSize: 36)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(activity.title,
                             style: const TextStyle(
-                                fontSize: 11, color: Colors.grey)),
-                      ]),
+                                fontSize: 16, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 4),
+                        Row(children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _intensityColor.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: _intensityColor.withOpacity(0.4)),
+                            ),
+                            child: Text(activity.intensity,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: _intensityColor)),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(children: [
+                              const Icon(Icons.timer_outlined,
+                                  size: 11, color: Colors.grey),
+                              const SizedBox(width: 3),
+                              Text(activity.duration,
+                                  style: const TextStyle(
+                                      fontSize: 11, color: Colors.grey)),
+                            ]),
+                          ),
+                        ]),
+                      ],
                     ),
-                  ]),
-                ],
-              ),
+                  ),
+                ]),
+                const SizedBox(height: 12),
+                Text(activity.description,
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.white70 : Colors.black54,
+                        height: 1.5)),
+              ],
             ),
-          ]),
-          const SizedBox(height: 12),
-          Text(activity.description,
-              style: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? Colors.white70 : Colors.black54,
-                  height: 1.5)),
+          ),
+
+          // ── Video Section ──────────────────────────────────────────────
+          if (activity.videoUrl != null) ...[
+            Divider(
+              height: 1,
+              color: isDark ? Colors.white12 : Colors.green.shade100,
+            ),
+            _VideoPreviewTile(
+              videoUrl: activity.videoUrl!,
+              isDark: isDark,
+              cs: cs,
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+// ── Video Preview Tile ────────────────────────────────────────────────────────
+/// Shows a tappable video thumbnail row that launches the YouTube video.
+/// For Flutter Web you could embed an iframe, but for mobile we open the URL.
+class _VideoPreviewTile extends StatelessWidget {
+  final String videoUrl;
+  final bool isDark;
+  final ColorScheme cs;
+
+  const _VideoPreviewTile({
+    required this.videoUrl,
+    required this.isDark,
+    required this.cs,
+  });
+
+  // Extract YouTube video ID from embed URL
+  String? _videoId() {
+    final uri = Uri.tryParse(videoUrl);
+    if (uri == null) return null;
+    // embed URL format: https://www.youtube.com/embed/VIDEO_ID
+    final segments = uri.pathSegments;
+    final idx = segments.indexOf('embed');
+    if (idx != -1 && idx + 1 < segments.length) {
+      return segments[idx + 1];
+    }
+    return null;
+  }
+
+  Future<void> _openVideo(BuildContext context) async {
+    final uri = Uri.tryParse(videoUrl);
+    if (uri == null) return;
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open video.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final videoId = _videoId();
+    final thumbUrl = videoId != null
+        ? 'https://img.youtube.com/vi/$videoId/mqdefault.jpg'
+        : null;
+
+    return InkWell(
+      onTap: () => _openVideo(context),
+      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(children: [
+          // Thumbnail
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Thumbnail image
+                if (thumbUrl != null)
+                  Image.network(
+                    thumbUrl,
+                    width: 100,
+                    height: 62,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 100,
+                      height: 62,
+                      color: isDark ? Colors.white10 : Colors.green.shade100,
+                      child: Icon(Icons.play_circle_outline_rounded,
+                          color: cs.primary, size: 32),
+                    ),
+                  )
+                else
+                  Container(
+                    width: 100,
+                    height: 62,
+                    color: isDark ? Colors.white10 : Colors.green.shade100,
+                    child: Icon(Icons.play_circle_outline_rounded,
+                        color: cs.primary, size: 32),
+                  ),
+                // Play button overlay
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.play_arrow_rounded,
+                      color: Colors.white, size: 20),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 14),
+
+          // Label
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Watch Exercise Video',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: cs.primary,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Tap to open on YouTube',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          Icon(Icons.open_in_new_rounded,
+              size: 18, color: isDark ? Colors.white38 : Colors.black38),
+        ]),
       ),
     );
   }

@@ -31,6 +31,12 @@ class AuthViewModel extends ChangeNotifier {
   bool _biometricsAvailable = false;
   String? _biometricInfo;
 
+  // ── Biometric fail counter (resets on success or password login) ───────────
+  int _bioFailCount = 0;
+  static const int _maxBioFails = 3;
+
+  bool get biometricLocked => _bioFailCount >= _maxBioFails;
+
   // ── Constructor ────────────────────────────────────────────────────────────
   AuthViewModel(
     this._db,
@@ -50,13 +56,15 @@ class AuthViewModel extends ChangeNotifier {
   String? get biometricInfo => _biometricInfo;
   bool get pendingGoogleOtp => _pendingGoogle != null;
   String? get pendingGoogleEmail => _pendingGoogle?.email;
+  int get bioFailCount => _bioFailCount;
+  int get maxBioFails => _maxBioFails;
 
   void clearError() {
     _error = null;
     notifyListeners();
   }
 
-  // ── Biometrics ─────────────────────────────────────────────────────────────
+  // ── Biometrics availability check ──────────────────────────────────────────
   Future<void> checkBiometricsAvailability() async {
     try {
       final supported = await _localAuth.isDeviceSupported();
@@ -71,6 +79,19 @@ class AuthViewModel extends ChangeNotifier {
     } finally {
       _biometricsChecked = true;
       notifyListeners();
+    }
+  }
+
+  // ── Check if the last logged-in user has biometrics enabled ────────────────
+  /// Used by LoginView to auto-prompt biometrics on app launch.
+  Future<bool> lastUserHasBiometricsEnabled() async {
+    try {
+      final lastEmail = await _keys.readLastEmail();
+      if (lastEmail == null) return false;
+      final user = await _db.getUser(lastEmail);
+      return user?.biometricsEnabled == true && user?.hasLoggedInOnce == true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -217,9 +238,11 @@ class AuthViewModel extends ChangeNotifier {
         user.hasLoggedInOnce = true;
         user.memberSince ??= DateTime.now();
         await _db.updateUser(user);
-        await _firestore.saveUser(user); // ← sync to Firestore
+        await _firestore.saveUser(user);
       }
       _currentUser = user;
+      _bioFailCount =
+          0; // ← reset bio fail counter on successful password login
       await _keys.saveLastEmail(n);
       _session.unlockSession();
       _error = null;
@@ -291,18 +314,19 @@ class AuthViewModel extends ChangeNotifier {
           memberSince: DateTime.now(),
         );
         await _db.createUser(user);
-        await _firestore.saveUser(user); // ← sync to Firestore
+        await _firestore.saveUser(user);
       } else {
         user.displayName = pending.displayName ?? user.displayName;
         user.photoUrl = pending.photoUrl ?? user.photoUrl;
         user.isGoogleUser = true;
         user.memberSince ??= DateTime.now();
         await _db.updateUser(user);
-        await _firestore.saveUser(user); // ← sync to Firestore
+        await _firestore.saveUser(user);
       }
 
       _pendingGoogle = null;
       _currentUser = user;
+      _bioFailCount = 0; // ← reset on successful Google login
       await _keys.saveLastEmail(email);
       _session.unlockSession();
       _error = null;
@@ -325,12 +349,18 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Biometric Unlock ───────────────────────────────────────────────────────
+  // ── Biometric Unlock (with 3-fail lockout) ─────────────────────────────────
   Future<bool> unlockWithBiometrics() async {
     _setBusy(true);
     try {
+      // ── Already locked out ─────────────────────────────────────────────
+      if (biometricLocked) {
+        _error = 'Too many failed attempts. Please use your password.';
+        return false;
+      }
+
       if (!_biometricsAvailable) {
-        _error = 'Biometrics not available.';
+        _error = 'Biometrics not available on this device.';
         return false;
       }
       final lastEmail = await _keys.readLastEmail();
@@ -348,29 +378,53 @@ class AuthViewModel extends ChangeNotifier {
         return false;
       }
       if (!user.biometricsEnabled) {
-        _error = 'Enable biometric unlock from profile first.';
+        _error = 'Enable biometric unlock from your profile first.';
         return false;
       }
+
       final ok = await _localAuth.authenticate(
         localizedReason: 'Unlock SkyFit Pro',
         options:
             const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
       );
+
       if (!ok) {
-        _error = 'Biometric cancelled.';
+        // ── Increment fail counter ───────────────────────────────────────
+        _bioFailCount++;
+        final remaining = _maxBioFails - _bioFailCount;
+        if (biometricLocked) {
+          _error =
+              'Biometric locked after $_maxBioFails failed attempts. Please use your password.';
+        } else {
+          _error =
+              'Biometric failed. $remaining attempt${remaining == 1 ? '' : 's'} remaining.';
+        }
+        notifyListeners();
         return false;
       }
+
+      // ── Success ───────────────────────────────────────────────────────
+      _bioFailCount = 0;
       _currentUser = user;
       _session.unlockSession();
       _error = null;
       notifyListeners();
       return true;
     } catch (_) {
+      _bioFailCount++;
       _error = 'Biometric unlock failed.';
+      notifyListeners();
       return false;
     } finally {
       _setBusy(false);
     }
+  }
+
+  // ── Reset bio fail counter (called when user switches to password manually) ─
+  void resetBioFailCount() {
+    _bioFailCount = 0;
+    _error = null;
+    notifyListeners();
   }
 
   // ── Profile ────────────────────────────────────────────────────────────────
@@ -384,7 +438,7 @@ class AuthViewModel extends ChangeNotifier {
     }
     user.biometricsEnabled = enabled;
     await _db.updateUser(user);
-    await _firestore.saveUser(user); // ← sync to Firestore
+    await _firestore.saveUser(user);
     _currentUser = user;
     _error = null;
     notifyListeners();
@@ -414,7 +468,7 @@ class AuthViewModel extends ChangeNotifier {
     if (age != null) user.age = age;
     if (weight != null) user.weight = weight;
     await _db.updateUser(user);
-    await _firestore.saveUser(user); // ← sync to Firestore
+    await _firestore.saveUser(user);
     _currentUser = user;
     notifyListeners();
   }
@@ -424,7 +478,7 @@ class AuthViewModel extends ChangeNotifier {
     if (user == null) return;
     user.localPhotoPath = path;
     await _db.updateUser(user);
-    await _firestore.saveUser(user); // ← sync to Firestore
+    await _firestore.saveUser(user);
     _currentUser = user;
     notifyListeners();
     // ignore: avoid_print
@@ -436,7 +490,7 @@ class AuthViewModel extends ChangeNotifier {
     if (user == null) return;
     user.localPhotoPath = null;
     await _db.updateUser(user);
-    await _firestore.saveUser(user); // ← sync to Firestore
+    await _firestore.saveUser(user);
     _currentUser = user;
     notifyListeners();
   }
@@ -446,6 +500,7 @@ class AuthViewModel extends ChangeNotifier {
     if (_currentUser?.isGoogleUser == true) await _firebase.signOut();
     _currentUser = null;
     _pendingGoogle = null;
+    _bioFailCount = 0; // ← reset on logout
     _session.lockSession();
     _error = null;
     notifyListeners();
