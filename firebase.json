@@ -1,1 +1,35 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"skyfit-pro-635ab","appId":"1:725416192091:android:542b6d2643fe6e99e0777e","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"skyfit-pro-635ab","configurations":{"android":"1:725416192091:android:621b4ff41fa2f238e0777e"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "skyfit-pro-635ab",
+          "appId": "1:725416192091:android:542b6d2643fe6e99e0777e",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "skyfit-pro-635ab",
+          "configurations": {
+            "android": "1:725416192091:android:621b4ff41fa2f238e0777e"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
