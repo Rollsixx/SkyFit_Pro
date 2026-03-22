@@ -9,7 +9,7 @@ import 'package:provider/provider.dart';
 import '../utils/constants.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../viewmodels/theme_viewmodel.dart';
-import 'login_view.dart';
+import 'auth/login_view.dart';
 
 class ProfileView extends StatefulWidget {
   const ProfileView({super.key});
@@ -164,7 +164,7 @@ class _ProfileViewState extends State<ProfileView>
 
   // ── Avatar builder ─────────────────────────────────────────────────────────
   Widget _buildAvatar(user, cs, String initials) {
-    final size = 96.0;
+    const size = 96.0;
     if (user.localPhotoPath != null) {
       return CircleAvatar(
         radius: size / 2,
@@ -502,8 +502,6 @@ class _BmiWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Simple weight category based on weight only
-    // (height not collected yet — can be added later)
     final cs = Theme.of(context).colorScheme;
     String category;
     Color color;

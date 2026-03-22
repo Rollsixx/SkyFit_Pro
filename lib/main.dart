@@ -13,15 +13,19 @@ import 'services/database_service.dart';
 import 'services/email_otp_service.dart';
 import 'services/encryption_service.dart';
 import 'services/firebase_auth_service.dart';
+import 'services/firestore_service.dart';
 import 'services/key_storage_service.dart';
+import 'services/local_auth_service.dart';
 import 'services/session_service.dart';
+import 'services/storage_service.dart';
 import 'utils/app_theme.dart';
 import 'utils/constants.dart';
 import 'utils/env_config.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/theme_viewmodel.dart';
+import 'viewmodels/user_viewmodel.dart';
 import 'viewmodels/weather_viewmodel.dart';
-import 'views/login_view.dart';
+import 'views/auth/login_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,6 +50,7 @@ Future<void> main() async {
 
   const secureStorage = FlutterSecureStorage();
   final keyStorageService = KeyStorageService(secureStorage);
+  final storageService = StorageService(secureStorage);
   final dbKey32 = await keyStorageService.getOrCreateDbKey32();
 
   final dbService = DatabaseService(dbKey32);
@@ -53,32 +58,39 @@ Future<void> main() async {
 
   final cryptoService = EncryptionService(dbKey32);
   final sessionService = SessionService();
+  final localAuthService = LocalAuthService();
 
   final themeVm = ThemeViewModel();
   await themeVm.load();
 
   runApp(SkyFitApp(
     keyStorageService: keyStorageService,
+    storageService: storageService,
     databaseService: dbService,
     encryptionService: cryptoService,
     sessionService: sessionService,
+    localAuthService: localAuthService,
     themeViewModel: themeVm,
   ));
 }
 
 class SkyFitApp extends StatelessWidget {
   final KeyStorageService keyStorageService;
+  final StorageService storageService;
   final DatabaseService databaseService;
   final EncryptionService encryptionService;
   final SessionService sessionService;
+  final LocalAuthService localAuthService;
   final ThemeViewModel themeViewModel;
 
   const SkyFitApp({
     super.key,
     required this.keyStorageService,
+    required this.storageService,
     required this.databaseService,
     required this.encryptionService,
     required this.sessionService,
+    required this.localAuthService,
     required this.themeViewModel,
   });
 
@@ -87,16 +99,27 @@ class SkyFitApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         Provider<KeyStorageService>.value(value: keyStorageService),
+        Provider<StorageService>.value(value: storageService),
         Provider<DatabaseService>.value(value: databaseService),
         Provider<EncryptionService>.value(value: encryptionService),
+        Provider<LocalAuthService>.value(value: localAuthService),
         Provider<EmailOtpService>(create: (_) => EmailOtpService()),
         Provider<FirebaseAuthService>(create: (_) => FirebaseAuthService()),
+        Provider<FirestoreService>(create: (_) => FirestoreService()),
         ChangeNotifierProvider<SessionService>.value(value: sessionService),
         ChangeNotifierProvider<ThemeViewModel>.value(value: themeViewModel),
 
         // ── WeatherViewModel ─────────────────────────────────────────────────
         ChangeNotifierProvider<WeatherViewModel>(
           create: (_) => WeatherViewModel(),
+        ),
+
+        // ── UserViewModel ────────────────────────────────────────────────────
+        ChangeNotifierProvider<UserViewModel>(
+          create: (ctx) => UserViewModel(
+            db: ctx.read<DatabaseService>(),
+            firestore: ctx.read<FirestoreService>(),
+          ),
         ),
 
         // ── AuthViewModel ────────────────────────────────────────────────────
@@ -149,7 +172,7 @@ class SkyFitApp extends StatelessWidget {
                 ..showSnackBar(const SnackBar(
                   duration: Duration(seconds: Constants.sessionWarningSeconds),
                   content: Text(
-                    '⚠️  Session expires in 30 s – tap anywhere to stay signed in.',
+                    '⚠️  Session expires in 60 s – tap anywhere to stay signed in.',
                   ),
                 ));
               await startVib();

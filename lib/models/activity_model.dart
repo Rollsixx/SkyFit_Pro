@@ -1,10 +1,10 @@
 class ActivityModel {
   final String title;
   final String description;
-  final String intensity; // Low, Moderate, High
-  final String icon; // emoji
-  final String duration; // e.g. "30-45 mins"
-  final String? videoUrl; // YouTube embed or direct video URL
+  final String intensity;
+  final String icon;
+  final String duration;
+  final String? videoUrl;
 
   const ActivityModel({
     required this.title,
@@ -16,7 +16,6 @@ class ActivityModel {
   });
 }
 
-// ── Activity Suggestion Engine ─────────────────────────────────────────────
 class ActivitySuggestionEngine {
   static ActivityModel suggest({
     required String weatherCondition,
@@ -33,7 +32,6 @@ class ActivitySuggestionEngine {
     final isExtreme =
         weatherCondition == 'Thunderstorm' || weatherCondition == 'Tornado';
 
-    // ── Extreme weather ────────────────────────────────────────────────────
     if (isExtreme) {
       return const ActivityModel(
         title: 'Indoor Rest & Stretching',
@@ -42,12 +40,10 @@ class ActivitySuggestionEngine {
         intensity: 'Low',
         icon: '🏠',
         duration: '20-30 mins',
-        videoUrl:
-            'https://www.youtube.com/embed/g_tea8ZNk5A', // Gentle stretching
+        videoUrl: 'https://www.youtube.com/watch?v=g_tea8ZNk5A',
       );
     }
 
-    // ── Rain or Snow ───────────────────────────────────────────────────────
     if (isRain || isSnow) {
       if (isSenior) {
         return const ActivityModel(
@@ -57,7 +53,7 @@ class ActivitySuggestionEngine {
           intensity: 'Low',
           icon: '🧘',
           duration: '20-30 mins',
-          videoUrl: 'https://www.youtube.com/embed/KEjiXUZOvh0', // Chair yoga
+          videoUrl: 'https://www.youtube.com/watch?v=KEjiXUZOvh0',
         );
       }
       if (isOverweight) {
@@ -68,8 +64,7 @@ class ActivitySuggestionEngine {
           intensity: 'Moderate',
           icon: '💪',
           duration: '30-40 mins',
-          videoUrl:
-              'https://www.youtube.com/embed/ml6cT4AZdqI', // Low impact workout
+          videoUrl: 'https://www.youtube.com/watch?v=ml6cT4AZdqI',
         );
       }
       return const ActivityModel(
@@ -79,12 +74,10 @@ class ActivitySuggestionEngine {
         intensity: 'Moderate',
         icon: '🏋️',
         duration: '30-45 mins',
-        videoUrl:
-            'https://www.youtube.com/embed/UItWltVZZmE', // Full body workout
+        videoUrl: 'https://www.youtube.com/watch?v=UItWltVZZmE',
       );
     }
 
-    // ── Extreme Heat ───────────────────────────────────────────────────────
     if (isHot) {
       if (isOverweight) {
         return const ActivityModel(
@@ -94,8 +87,7 @@ class ActivitySuggestionEngine {
           intensity: 'Low',
           icon: '🏊',
           duration: '30-45 mins',
-          videoUrl:
-              'https://www.youtube.com/embed/zh-VDMKdNpQ', // Swimming workout
+          videoUrl: 'https://www.youtube.com/watch?v=zh-VDMKdNpQ',
         );
       }
       return const ActivityModel(
@@ -105,12 +97,10 @@ class ActivitySuggestionEngine {
         intensity: 'Moderate',
         icon: '🌅',
         duration: '30-40 mins',
-        videoUrl:
-            'https://www.youtube.com/embed/kZDvg92tTMc', // Morning run tips
+        videoUrl: 'https://www.youtube.com/watch?v=kZDvg92tTMc',
       );
     }
 
-    // ── Clear / Sunny ──────────────────────────────────────────────────────
     if (isClear) {
       if (isSenior) {
         return const ActivityModel(
@@ -120,7 +110,7 @@ class ActivitySuggestionEngine {
           intensity: 'Low',
           icon: '🌳',
           duration: '30-45 mins',
-          videoUrl: 'https://www.youtube.com/embed/cEOS_zanycs', // Tai Chi
+          videoUrl: 'https://www.youtube.com/watch?v=cEOS_zanycs',
         );
       }
       if (isOverweight) {
@@ -131,8 +121,7 @@ class ActivitySuggestionEngine {
           intensity: 'Moderate',
           icon: '🚶',
           duration: '30-45 mins',
-          videoUrl:
-              'https://www.youtube.com/embed/njeZ29umqVE', // Brisk walk workout
+          videoUrl: 'https://www.youtube.com/watch?v=njeZ29umqVE',
         );
       }
       return const ActivityModel(
@@ -142,11 +131,10 @@ class ActivitySuggestionEngine {
         intensity: 'High',
         icon: '🏃',
         duration: '30-45 mins',
-        videoUrl: 'https://www.youtube.com/embed/ml6cT4AZdqI', // HIIT workout
+        videoUrl: 'https://www.youtube.com/watch?v=ml6cT4AZdqI',
       );
     }
 
-    // ── Cloudy / Default ───────────────────────────────────────────────────
     if (isSenior) {
       return const ActivityModel(
         title: 'Light Walk & Stretching',
@@ -155,7 +143,7 @@ class ActivitySuggestionEngine {
         intensity: 'Low',
         icon: '🚶',
         duration: '20-30 mins',
-        videoUrl: 'https://www.youtube.com/embed/g_tea8ZNk5A', // Stretching
+        videoUrl: 'https://www.youtube.com/watch?v=g_tea8ZNk5A',
       );
     }
     return const ActivityModel(
@@ -165,7 +153,7 @@ class ActivitySuggestionEngine {
       intensity: 'Moderate',
       icon: '🚴',
       duration: '30-45 mins',
-      videoUrl: 'https://www.youtube.com/embed/kZDvg92tTMc', // Cycling/jogging
+      videoUrl: 'https://www.youtube.com/watch?v=kZDvg92tTMc',
     );
   }
 }

@@ -6,8 +6,8 @@ class Constants {
   static const String appName = 'SkyFit Pro';
 
   // ── Session ────────────────────────────────────────────────────────────────
-  static const int inactivityTimeoutSeconds = 120;
-  static const int sessionWarningSeconds = 30;
+  static const int inactivityTimeoutSeconds = 300;
+  static const int sessionWarningSeconds = 60;
 
   // ── Secure Storage Keys ────────────────────────────────────────────────────
   static const String secureDbKey = 'SKYFIT_SECURE_DB_KEY_V1';

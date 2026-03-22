@@ -8,7 +8,7 @@ import '../models/weather_model.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../viewmodels/theme_viewmodel.dart';
 import '../viewmodels/weather_viewmodel.dart';
-import 'login_view.dart';
+import 'auth/login_view.dart';
 import 'profile_view.dart';
 
 class HomeView extends StatefulWidget {
@@ -442,8 +442,6 @@ class _ActivityCard extends StatelessWidget {
 }
 
 // ── Video Preview Tile ────────────────────────────────────────────────────────
-/// Shows a tappable video thumbnail row that launches the YouTube video.
-/// For Flutter Web you could embed an iframe, but for mobile we open the URL.
 class _VideoPreviewTile extends StatelessWidget {
   final String videoUrl;
   final bool isDark;
@@ -455,11 +453,14 @@ class _VideoPreviewTile extends StatelessWidget {
     required this.cs,
   });
 
-  // Extract YouTube video ID from embed URL
   String? _videoId() {
     final uri = Uri.tryParse(videoUrl);
     if (uri == null) return null;
-    // embed URL format: https://www.youtube.com/embed/VIDEO_ID
+    // watch?v=VIDEO_ID format
+    if (uri.queryParameters.containsKey('v')) {
+      return uri.queryParameters['v'];
+    }
+    // embed/VIDEO_ID format
     final segments = uri.pathSegments;
     final idx = segments.indexOf('embed');
     if (idx != -1 && idx + 1 < segments.length) {
@@ -469,14 +470,27 @@ class _VideoPreviewTile extends StatelessWidget {
   }
 
   Future<void> _openVideo(BuildContext context) async {
-    final uri = Uri.tryParse(videoUrl);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
+    try {
+      final uri = Uri.tryParse(videoUrl);
+      if (uri == null) return;
+
+      // Try external app first (YouTube app)
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      // If external fails, try in-app browser
+      if (!launched) {
+        await launchUrl(
+          uri,
+          mode: LaunchMode.inAppWebView,
+        );
+      }
+    } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open video.')),
+          SnackBar(content: Text('Could not open video: $e')),
         );
       }
     }
@@ -495,13 +509,11 @@ class _VideoPreviewTile extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(children: [
-          // Thumbnail
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Thumbnail image
                 if (thumbUrl != null)
                   Image.network(
                     thumbUrl,
@@ -524,7 +536,6 @@ class _VideoPreviewTile extends StatelessWidget {
                     child: Icon(Icons.play_circle_outline_rounded,
                         color: cs.primary, size: 32),
                   ),
-                // Play button overlay
                 Container(
                   width: 32,
                   height: 32,
@@ -538,10 +549,7 @@ class _VideoPreviewTile extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(width: 14),
-
-          // Label
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -565,7 +573,6 @@ class _VideoPreviewTile extends StatelessWidget {
               ],
             ),
           ),
-
           Icon(Icons.open_in_new_rounded,
               size: 18, color: isDark ? Colors.white38 : Colors.black38),
         ]),
