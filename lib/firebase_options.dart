@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart'
 
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
-    if (kIsWeb) throw UnsupportedError('Web not supported');
+    if (kIsWeb) return web;
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return android;
@@ -12,6 +12,16 @@ class DefaultFirebaseOptions {
         throw UnsupportedError('Unsupported platform');
     }
   }
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyDWrZWT6ytEO6ycGpvl-3njsjoeG-812cg',
+    authDomain: 'skyfit-pro-635ab.firebaseapp.com',
+    projectId: 'skyfit-pro-635ab',
+    storageBucket: 'skyfit-pro-635ab.firebasestorage.app',
+    messagingSenderId: '725416192091',
+    appId: '1:725416192091:web:fbadc072abc153ebe0777e',
+    measurementId: 'G-W6L5NXRHWK',
+  );
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCWJ1arSqHNin68qtWsk5FO8P0_ufNPGk0',
