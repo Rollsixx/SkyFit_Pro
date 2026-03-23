@@ -1,225 +1,166 @@
-# CipherTask – Secure Encrypted To-Do System (Flutter, Strict MVVM)
+# SkyFit Pro – Secure Health & Fitness App (Flutter, Strict MVVM)
 
-**Repo:** (https://github.com/iloysalvador948-coder/Cipher_Task1)
+**GitHub:** https://github.com/Rollsixx/SkyFit_Pro
 
-**APK:** https://github.com/iloysalvador948-coder/Cipher_Task1/releases/download/v1.0.3/app-release.apk
-
-CipherTask is a local-first secure To-Do app demonstrating:
-- **Encrypted database at rest** (Hive + `HiveAesCipher`)
-- **AES-256-GCM field encryption** (sensitive note/details)
-- **Hardware-backed key storage** (`flutter_secure_storage` → Android Keystore / iOS Keychain)
-- **Biometric unlock** after first password login (`local_auth`)
-- **Session auto-lock after 120 seconds** of inactivity using a root `Listener`
-- Optional: **Screenshot prevention** (`screen_protector`)
-- Optional: **OTP screen simulation** during registration (no real email; for lab demo)
+**Live Web App:** https://skyfit-pro-635ab.web.app
 
 ---
 
-## Team Roles 
+## Team Members
 - Angelo Padullon – Lead Architect & DB Engineer, Security & Cryptography Lead
 - Jhonn Lee Maning – Auth & Biometrics Specialist, Backend & Network (SSL)
 - Rolly Boy Ryan Pionilla – UI/UX & Integration
+
 ---
 
-## Strict MVVM Folder Structure (MANDATORY)
+## About
+SkyFit Pro is a secure personal health & fitness companion that suggests
+personalized workout activities based on real-time weather data and user
+profile (age & weight).
 
+### Key Features
+- Secure Registration with OTP Email Verification
+- Google SSO with OTP second factor
+- Biometric Authentication (Fingerprint) with 3-fail lockout
+- Session auto-lock after 5 minutes of inactivity
+- Real-time Weather via OpenWeatherMap API
+- Personalized Activity Suggestions based on Weather + Age + Weight
+- Encrypted local database (Hive + HiveAesCipher)
+- AES-256-GCM field encryption for sensitive data
+- Hardware-backed key storage (Android Keystore / iOS Keychain)
+- Dark/Light mode toggle
+- Profile management (Photo, Bio, Age, Weight, etc.)
+
+---
+
+## Strict MVVM Folder Structure
+
+```
 lib/
 ├── main.dart
 ├── models/
-│ ├── todo_model.dart
-│ └── user_model.dart
+│   ├── user_model.dart
+│   ├── weather_model.dart
+│   └── activity_model.dart
 ├── views/
-│ ├── login_view.dart
-│ ├── register_view.dart
-│ ├── todo_list_view.dart
-│ └── widgets/
+│   ├── auth/
+│   │   ├── login_view.dart
+│   │   └── register_view.dart
+│   ├── home_view.dart
+│   ├── profile_view.dart
+│   └── widgets/
+│       └── custom_button.dart
 ├── viewmodels/
-│ ├── auth_viewmodel.dart
-│ └── todo_viewmodel.dart
+│   ├── auth_viewmodel.dart
+│   ├── user_viewmodel.dart
+│   ├── theme_viewmodel.dart
+│   └── weather_viewmodel.dart
+├── repositories/
+│   ├── auth_repository.dart
+│   └── weather_repository.dart
 ├── services/
-│ ├── encryption_service.dart
-│ ├── database_service.dart
-│ ├── key_storage_service.dart
-│ └── session_service.dart
+│   ├── api_service.dart
+│   ├── database_service.dart
+│   ├── email_otp_service.dart
+│   ├── encryption_service.dart
+│   ├── firebase_auth_service.dart
+│   ├── firestore_service.dart
+│   ├── key_storage_service.dart
+│   ├── local_auth_service.dart
+│   ├── session_service.dart
+│   └── storage_service.dart
 └── utils/
-└── constants.dart
-
-
----
-
-## Features Checklist
-### Security
-- [x] Encrypted database at rest (Hive + HiveAesCipher, key stored in secure storage)
-- [x] AES-256-GCM encryption for sensitive note field (random nonce per encrypt)
-- [x] No hardcoded encryption keys
-- [x] Session auto-lock after **120 seconds** inactivity (resets on every touch)
-- [x] Biometric unlock available only after at least one successful password login
-- [x] Optional screenshot prevention enabled
-
-### App
-- [x] Register (email + password) stored locally
-- [x] OTP screen simulation during registration (lab demonstration)
-- [x] Login (password)
-- [x] Add / View / Edit / Delete To-Dos
-- [x] Toggle completed status
-- [x] Created/updated timestamps
+    ├── app_theme.dart
+    ├── constants.dart
+    └── env_config.dart
+```
 
 ---
 
 ## Tech Stack
 - Flutter
 - Provider (state management)
-- Hive + hive_flutter (local database)
+- Hive + hive_flutter (encrypted local database)
 - flutter_secure_storage (hardware-backed key storage)
 - encrypt (AES-GCM)
 - pointycastle (PBKDF2 password hashing)
 - local_auth (biometrics)
+- Firebase Auth (Google SSO + Email/Password)
+- Cloud Firestore (user profile sync)
+- OpenWeatherMap API (weather data)
+- Geolocator (device location)
+- EmailJS (OTP email delivery)
 - screen_protector (screenshot prevention)
 
 ---
 
-## Setup & Run
+## Setup & Run Locally
+
 ### 1) Install dependencies
 ```bash
 flutter pub get
+```
 
-2) Run
-flutter run
+### 2) Run with required API keys
+```bash
+flutter run \
+  --dart-define=OPENWEATHER_API_KEY=your_key \
+  --dart-define=EMAILJS_SERVICE_ID=your_id \
+  --dart-define=EMAILJS_TEMPLATE_ID=your_template \
+  --dart-define=EMAILJS_PUBLIC_KEY=your_public_key
+```
 
-On first run, the app generates a 32-byte DB encryption key and stores it in secure storage.
-
-Build APK (Release)
+### 3) Build APK
+```bash
 flutter build apk --release
+```
 
-APK output:
-
-build/app/outputs/flutter-apk/app-release.apk
-
-Notes
-AES payload format
-
-Sensitive note is stored as:
-v1:<iv_base64>:<cipher_base64>
-
-How to swap to SQLCipher later (high level)
-
-Replace Hive storage with sqflite_sqlcipher.
-
-Keep key storage the same (KeyStorageService).
-
-Keep AES-GCM field encryption unchanged (EncryptionService).
-
-Move CRUD logic from Hive to SQLCipher tables.
-
-Security Disclaimer
-
-This is a laboratory exercise. It demonstrates correct separation of concerns (Strict MVVM) and baseline secure patterns for local storage. For production, add:
-
-device integrity checks,
-
-secure wipe on logout (optional),
-
-rate limiting / lockout on repeated failed logins,
-
-stronger password policy + UI feedback,
-
-backup/restore strategy with key rotation.
-
+### 4) Build Web
+```bash
+flutter build web --release
+```
 
 ---
 
-## 8) Testing Checklist (functional + security)
+## Deployment
 
-### Functional Tests
-- [ ] Register new user with valid email/password → OTP simulation appears → account created
-- [ ] Register same email again → blocked with error
-- [ ] Login with correct password → navigates to To-Do list
-- [ ] Login with wrong password → error shown
-- [ ] Add a to-do with title + note → appears in list
-- [ ] Edit a to-do → changes persist after restart
-- [ ] Toggle completed checkbox → state persists after restart
-- [ ] Delete to-do → confirmation dialog → removed
-- [ ] Logout → returns to Login, to-do list not accessible
+### Firebase Hosting
+```bash
+firebase deploy --only hosting
+```
 
-### Security Tests
-- [ ] Verify **no encryption keys** appear in source code (keys only in secure storage)
-- [ ] Verify Hive boxes are opened with `HiveAesCipher` (encrypted at rest)
-- [ ] Verify sensitive note is stored as `v1:<iv>:<cipher>` (not plaintext)
-- [ ] Verify different encryptions of same note produce different ciphertext (random nonce)
-- [ ] Verify biometric unlock:
-  - first-time user cannot unlock biometrically until password login occurs
-  - biometric must be enabled by toggle (after password login)
-- [ ] Verify inactivity timeout:
-  - leave app untouched for **120s** → auto-logout → Login shown
-  - interacting (taps/scroll) keeps session alive
-- [ ] Screenshot prevention (bonus):
-  - attempt screenshot → blocked (device-dependent)
-- [ ] Data separation:
-  - Views contain no DB/encryption calls (only ViewModel calls)
-  - Services contain no UI code
+### Docker
+```bash
+docker build -t skyfit-pro .
+docker run -p 8080:8080 skyfit-pro
+```
 
 ---
 
-## 9) One-Page Infographic Content (text layout only)
-
-**TITLE:** CipherTask – Secure Encrypted To-Do (Flutter • Strict MVVM)
-
-**SUBTITLE:** Demon Slayer Theme • Local-First Security Lab
-
----
-
-### 1) Problem
-- Local notes and to-dos are often stored in plaintext.
-- Lost phone = exposed private notes.
-- Need secure at-rest storage + secure unlock + session protection.
-
----
-
-### 2) Solution (What CipherTask Built)
-- Encrypted database storage (Hive + HiveAesCipher)
-- AES-256-GCM encrypts sensitive note field per record
-- Hardware-backed key storage (Keystore/Keychain via flutter_secure_storage)
+## Security Features
+- Encrypted database at rest (Hive + HiveAesCipher)
+- AES-256-GCM encryption for sensitive fields
+- No hardcoded encryption keys
+- Session auto-lock after 5 minutes inactivity
 - Biometric unlock (after first password login)
-- Auto-lock after **120 seconds** inactivity (root Listener resets timer)
+- Screenshot prevention enabled
+- PBKDF2 password hashing (100,000 iterations)
 
 ---
 
-### 3) Security Flow (Simple)
-1. First run → generate 32-byte DB key → store in secure storage  
-2. Open encrypted Hive boxes using DB key  
-3. Before saving note → AES-GCM encrypt with random nonce  
-4. On inactivity (120s) → lock session → return to Login  
-5. Biometrics allowed only after password login + user toggle enabled
+## Health Logic Algorithm
+
+| Weather | Age | Weight | Suggested Activity |
+|---------|-----|--------|--------------------|
+| Clear/Sunny | < 50 | Normal | Outdoor Running / HIIT |
+| Clear/Sunny | >= 50 | Any | Morning Walk / Tai Chi |
+| Rain/Snow | Any | Any | Indoor Yoga / Bodyweight |
+| Extreme Heat | Any | >= 90kg | Swimming / Light Stretching |
+| Thunderstorm | Any | Any | Indoor Rest & Stretching |
 
 ---
 
-### 4) Strict MVVM Responsibilities
-- **Views:** UI only (screens, dialogs, snackbars)
-- **ViewModels:** state + orchestration (calls services)
-- **Services:** encryption, secure keys, database, sessions
-- **Models:** plain data classes
-
----
-
-### 5) Tools / Packages
-- Provider, Hive, hive_flutter  
-- flutter_secure_storage  
-- encrypt (AES-GCM), pointycastle (PBKDF2)  
-- local_auth (biometrics)  
-- screen_protector (screenshot prevention)  
-
----
-
-### 6) Team
-- Angelo Padullon – Lead Architect & DB Engineer, Security & Cryptography Lead
-- Jhonn Lee Maning – Auth & Biometrics Specialist, Backend & Network (SSL)
-- Rolly Boy Ryan Pionilla – UI/UX & Integration  
----
-
-### 7) Links
-- GitHub: [PASTE_PUBLIC_GITHUB_URL_HERE]  
-- APK: [PASTE_APK_LINK_OR_LOCATION_HERE]    
-
---- 
-
-If you paste these files into the exact folder structure and run `flutter pub get`, this project is **compile-ready** and follows **Strict MVVM** with the required security controls.
+## Security Disclaimer
+This is a laboratory exercise demonstrating correct MVVM separation
+and baseline secure patterns. For production use, add device integrity
+checks, rate limiting, and key rotation.
