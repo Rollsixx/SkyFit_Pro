@@ -465,8 +465,11 @@ class AuthViewModel extends ChangeNotifier {
 
       final ok = await _localAuth.authenticate(
         localizedReason: 'Unlock SkyFit Pro',
-        options:
-            const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
+        options: const AuthenticationOptions(
+          biometricOnly: false,
+          stickyAuth: true,
+          sensitiveTransaction: true,
+        ),
       );
 
       if (!ok) {
@@ -489,9 +492,11 @@ class AuthViewModel extends ChangeNotifier {
       _error = null;
       notifyListeners();
       return true;
-    } catch (_) {
+    } catch (e) {
       _bioFailCount++;
-      _error = 'Biometric unlock failed.';
+      _error = 'Biometric unlock failed: $e';
+      // ignore: avoid_print
+      print('[AuthViewModel] Biometric error: $e');
       notifyListeners();
       return false;
     } finally {

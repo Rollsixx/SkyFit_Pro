@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
 
 import '../../utils/constants.dart';
@@ -19,21 +20,21 @@ class _LoginViewState extends State<LoginView> {
   final _password = TextEditingController();
   final _otpCtrl = TextEditingController();
   bool _obscure = true;
-
-  // ── Tracks whether we already auto-prompted biometrics this session ─────────
   bool _biometricAutoPrompted = false;
+
+  // ── Track what biometric type is available ─────────────────────────────────
+  List<BiometricType> _availableBiometrics = [];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final auth = context.read<AuthViewModel>();
-
-      // 1. Check hardware availability
       await auth.checkBiometricsAvailability();
 
-      // 2. If hardware available AND last user had biometrics enabled,
-      //    auto-prompt without waiting for button tap
+      // Load available biometric types
+      await _loadBiometricTypes();
+
       if (!_biometricAutoPrompted &&
           auth.biometricsAvailable &&
           !auth.biometricLocked) {
@@ -44,6 +45,38 @@ class _LoginViewState extends State<LoginView> {
         }
       }
     });
+  }
+
+  Future<void> _loadBiometricTypes() async {
+    try {
+      final localAuth = LocalAuthentication();
+      final biometrics = await localAuth.getAvailableBiometrics();
+      if (mounted) {
+        setState(() => _availableBiometrics = biometrics);
+      }
+    } catch (_) {}
+  }
+
+  // ── Get biometric label based on available type ────────────────────────────
+  String get _biometricLabel {
+    if (_availableBiometrics.contains(BiometricType.face)) {
+      return 'Face ID';
+    } else if (_availableBiometrics.contains(BiometricType.fingerprint)) {
+      return 'Fingerprint';
+    } else if (_availableBiometrics.contains(BiometricType.strong)) {
+      return 'Biometrics';
+    } else if (_availableBiometrics.contains(BiometricType.weak)) {
+      return 'Biometrics';
+    }
+    return 'Biometrics';
+  }
+
+  // ── Get biometric icon based on available type ─────────────────────────────
+  IconData get _biometricIcon {
+    if (_availableBiometrics.contains(BiometricType.face)) {
+      return Icons.face_rounded;
+    }
+    return Icons.fingerprint_rounded;
   }
 
   @override
@@ -388,19 +421,19 @@ class _LoginViewState extends State<LoginView> {
                       icon: Icon(
                         auth.biometricLocked
                             ? Icons.lock_rounded
-                            : Icons.fingerprint_rounded,
+                            : _biometricIcon,
                       ),
                       label: Text(
                         auth.biometricLocked
-                            ? 'Biometrics locked — use password'
+                            ? '$_biometricLabel locked — use password'
                             : !auth.biometricsChecked
                                 ? 'Checking biometrics...'
                                 : !auth.biometricsAvailable
-                                    ? 'Fingerprint not available'
+                                    ? '$_biometricLabel not available'
                                     : auth.bioFailCount > 0
-                                        ? 'Retry Fingerprint '
+                                        ? 'Retry $_biometricLabel '
                                             '(${auth.maxBioFails - auth.bioFailCount} left)'
-                                        : 'Unlock with Fingerprint',
+                                        : 'Unlock with $_biometricLabel',
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: auth.biometricLocked
@@ -435,7 +468,7 @@ class _LoginViewState extends State<LoginView> {
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
-                        '🔒  Biometrics locked. Use your password to sign in.',
+                        '🔒  $_biometricLabel locked. Use your password to sign in.',
                         style: const TextStyle(fontSize: 12, color: Colors.red),
                         textAlign: TextAlign.center,
                       ),

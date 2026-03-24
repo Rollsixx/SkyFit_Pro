@@ -36,8 +36,9 @@ class LocalAuthService {
       return await _localAuth.authenticate(
         localizedReason: reason,
         options: const AuthenticationOptions(
-          biometricOnly: true,
+          biometricOnly: false,
           stickyAuth: true,
+          sensitiveTransaction: true,
         ),
       );
     } catch (e) {
