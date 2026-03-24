@@ -7,9 +7,9 @@
 ---
 
 ## Team Members
-- Angelo Padullon – Lead Architect & DB Engineer, Security & Cryptography Lead
-- Jhonn Lee Maning – Auth & Biometrics Specialist, Backend & Network (SSL)
-- Rolly Boy Ryan Pionilla – UI/UX & Integration
+- Rolly Boy Ryan Pionilla – Lead Architect & DB Engineer, Security & Cryptography Lead
+- Angelo Padullon – Auth & Biometrics Specialist, Backend & Network (SSL)
+- Jhonn Lee Maning – UI/UX & Integration
 
 ---
 

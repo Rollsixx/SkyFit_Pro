@@ -21,9 +21,8 @@ class _LoginViewState extends State<LoginView> {
   final _otpCtrl = TextEditingController();
   bool _obscure = true;
   bool _biometricAutoPrompted = false;
-
-  // ── Track what biometric type is available ─────────────────────────────────
   List<BiometricType> _availableBiometrics = [];
+  bool _deviceSupported = false;
 
   @override
   void initState() {
@@ -31,8 +30,6 @@ class _LoginViewState extends State<LoginView> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final auth = context.read<AuthViewModel>();
       await auth.checkBiometricsAvailability();
-
-      // Load available biometric types
       await _loadBiometricTypes();
 
       if (!_biometricAutoPrompted &&
@@ -50,32 +47,61 @@ class _LoginViewState extends State<LoginView> {
   Future<void> _loadBiometricTypes() async {
     try {
       final localAuth = LocalAuthentication();
+      final supported = await localAuth.isDeviceSupported();
       final biometrics = await localAuth.getAvailableBiometrics();
+
+      // ignore: avoid_print
+      print('[LoginView] isDeviceSupported: $supported');
+      // ignore: avoid_print
+      print('[LoginView] Available biometrics: $biometrics');
+
       if (mounted) {
-        setState(() => _availableBiometrics = biometrics);
+        setState(() {
+          _deviceSupported = supported;
+          // ── Universal fix for ALL devices ──────────────────────────────────
+          // Xiaomi/POCO: face unlock shows as empty list but device is supported
+          // Samsung: shows [face, fingerprint]
+          // iPhone: shows [face] for Face ID or [fingerprint] for Touch ID
+          // Pixel: shows [fingerprint]
+          // If device is supported but list is empty → treat as face/biometrics
+          if (supported && biometrics.isEmpty) {
+            _availableBiometrics = [BiometricType.weak];
+          } else {
+            _availableBiometrics = biometrics;
+          }
+        });
       }
-    } catch (_) {}
+    } catch (e) {
+      // ignore: avoid_print
+      print('[LoginView] Error loading biometrics: $e');
+    }
   }
 
-  // ── Get biometric label based on available type ────────────────────────────
+  // ── Detect biometric type for ALL devices ──────────────────────────────────
+  bool get _hasFaceId =>
+      _availableBiometrics.contains(BiometricType.face) ||
+      // Xiaomi/POCO face unlock registered as weak
+      (_deviceSupported &&
+          _availableBiometrics.contains(BiometricType.weak) &&
+          !_availableBiometrics.contains(BiometricType.fingerprint));
+
+  bool get _hasFingerprint =>
+      _availableBiometrics.contains(BiometricType.fingerprint) ||
+      _availableBiometrics.contains(BiometricType.strong);
+
+  bool get _hasBoth => _hasFaceId && _hasFingerprint;
+
+  // ── Label for biometric button ─────────────────────────────────────────────
   String get _biometricLabel {
-    if (_availableBiometrics.contains(BiometricType.face)) {
-      return 'Face ID';
-    } else if (_availableBiometrics.contains(BiometricType.fingerprint)) {
-      return 'Fingerprint';
-    } else if (_availableBiometrics.contains(BiometricType.strong)) {
-      return 'Biometrics';
-    } else if (_availableBiometrics.contains(BiometricType.weak)) {
-      return 'Biometrics';
-    }
+    if (_hasBoth) return 'Biometrics';
+    if (_hasFaceId) return 'Face ID';
+    if (_hasFingerprint) return 'Fingerprint';
     return 'Biometrics';
   }
 
-  // ── Get biometric icon based on available type ─────────────────────────────
+  // ── Icon for biometric button ──────────────────────────────────────────────
   IconData get _biometricIcon {
-    if (_availableBiometrics.contains(BiometricType.face)) {
-      return Icons.face_rounded;
-    }
+    if (_hasFaceId && !_hasFingerprint) return Icons.face_rounded;
     return Icons.fingerprint_rounded;
   }
 
@@ -429,7 +455,7 @@ class _LoginViewState extends State<LoginView> {
                             : !auth.biometricsChecked
                                 ? 'Checking biometrics...'
                                 : !auth.biometricsAvailable
-                                    ? '$_biometricLabel not available'
+                                    ? 'Biometrics not available'
                                     : auth.bioFailCount > 0
                                         ? 'Retry $_biometricLabel '
                                             '(${auth.maxBioFails - auth.bioFailCount} left)'

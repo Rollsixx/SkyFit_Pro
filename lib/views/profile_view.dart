@@ -306,13 +306,63 @@ class _ProfileViewState extends State<ProfileView>
               Card(
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16)),
-                child: SwitchListTile(
-                  title: const Text('Biometric Login'),
-                  subtitle: const Text('Use fingerprint to unlock'),
-                  secondary: Icon(Icons.fingerprint_rounded, color: cs.primary),
-                  value: user.biometricsEnabled,
-                  onChanged:
-                      auth.isBusy ? null : (v) => auth.setBiometricsEnabled(v),
+                child: Column(
+                  children: [
+                    // ── Fingerprint toggle ───────────────────────────────────────
+                    SwitchListTile(
+                      title: const Text('Fingerprint Login'),
+                      subtitle: const Text('Use fingerprint to unlock'),
+                      secondary:
+                          Icon(Icons.fingerprint_rounded, color: cs.primary),
+                      value: user.biometricsEnabled,
+                      onChanged: auth.isBusy
+                          ? null
+                          : (v) => auth.setBiometricsEnabled(v),
+                    ),
+                    Divider(
+                        height: 1,
+                        color: isDark ? Colors.white12 : Colors.black12),
+                    // ── Face ID toggle ───────────────────────────────────────────
+                    SwitchListTile(
+                      title: const Text('Face ID Login'),
+                      subtitle: const Text('Use face recognition to unlock'),
+                      secondary: Icon(Icons.face_rounded, color: cs.primary),
+                      value: user.biometricsEnabled,
+                      onChanged: auth.isBusy
+                          ? null
+                          : (v) => auth.setBiometricsEnabled(v),
+                    ),
+                    // ── Info note ────────────────────────────────────────────────
+                    if (user.biometricsEnabled)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: cs.primary.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border:
+                                Border.all(color: cs.primary.withOpacity(0.2)),
+                          ),
+                          child: Row(children: [
+                            Icon(Icons.info_outline,
+                                size: 14, color: cs.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Both Fingerprint and Face ID use the same toggle. '
+                                'Your device will use whichever is available.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color:
+                                      isDark ? Colors.white54 : Colors.black54,
+                                ),
+                              ),
+                            ),
+                          ]),
+                        ),
+                      ),
+                  ],
                 ),
               ),
 

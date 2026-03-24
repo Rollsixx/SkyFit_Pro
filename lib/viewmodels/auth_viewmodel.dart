@@ -30,11 +30,13 @@ class AuthViewModel extends ChangeNotifier {
   bool _biometricsChecked = false;
   bool _biometricsAvailable = false;
   String? _biometricInfo;
+  List<BiometricType> _availableBiometricTypes = [];
 
   int _bioFailCount = 0;
   static const int _maxBioFails = 3;
 
   bool get biometricLocked => _bioFailCount >= _maxBioFails;
+  List<BiometricType> get availableBiometricTypes => _availableBiometricTypes;
 
   AuthViewModel(
     this._db,
@@ -62,6 +64,13 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   // ── Biometrics availability check ──────────────────────────────────────────
+  // Works on ALL devices:
+  // - Samsung (fingerprint + face)
+  // - iPhone (Face ID + Touch ID)
+  // - Xiaomi/POCO (fingerprint + face unlock)
+  // - Pixel (fingerprint)
+  // - OnePlus (fingerprint + face)
+  // - Huawei (fingerprint + face)
   Future<void> checkBiometricsAvailability() async {
     if (kIsWeb) {
       _biometricsAvailable = false;
@@ -73,12 +82,29 @@ class AuthViewModel extends ChangeNotifier {
       final supported = await _localAuth.isDeviceSupported();
       final canCheck = await _localAuth.canCheckBiometrics;
       final available = await _localAuth.getAvailableBiometrics();
-      _biometricsAvailable = supported && canCheck && available.isNotEmpty;
+
+      // ignore: avoid_print
+      print('[AuthViewModel] isDeviceSupported: $supported');
+      // ignore: avoid_print
+      print('[AuthViewModel] canCheckBiometrics: $canCheck');
+      // ignore: avoid_print
+      print('[AuthViewModel] availableBiometrics: $available');
+
+      _availableBiometricTypes = available;
+
+      // ── Universal biometric detection ──────────────────────────────────────
+      // Strategy: if device is supported, it can authenticate
+      // This covers ALL brands including Xiaomi/POCO face unlock
+      // which doesn't appear in getAvailableBiometrics() but still works
+      _biometricsAvailable = supported;
+
       _biometricInfo =
           'supported=$supported canCheck=$canCheck available=$available';
     } catch (e) {
       _biometricsAvailable = false;
       _biometricInfo = 'error=$e';
+      // ignore: avoid_print
+      print('[AuthViewModel] Biometrics check error: $e');
     } finally {
       _biometricsChecked = true;
       notifyListeners();
@@ -466,6 +492,8 @@ class AuthViewModel extends ChangeNotifier {
       final ok = await _localAuth.authenticate(
         localizedReason: 'Unlock SkyFit Pro',
         options: const AuthenticationOptions(
+          // biometricOnly: false allows face unlock on ALL devices
+          // including Xiaomi/POCO that register face as device credential
           biometricOnly: false,
           stickyAuth: true,
           sensitiveTransaction: true,
