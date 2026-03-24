@@ -16,7 +16,7 @@ import 'services/firebase_auth_service.dart';
 import 'services/firestore_service.dart';
 import 'services/key_storage_service.dart';
 import 'services/local_auth_service.dart';
-import 'services/session_service.dart';
+import 'services/session_manager.dart';
 import 'services/storage_service.dart';
 import 'utils/app_theme.dart';
 import 'utils/constants.dart';
@@ -30,12 +30,11 @@ import 'views/auth/login_view.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ── Assert all required --dart-define keys are present (debug only) ─────────
   EnvConfig.assertKeysPresent();
 
-  try {
-    await ScreenProtector.preventScreenshotOn();
-  } catch (_) {}
+  //try {
+  // await ScreenProtector.preventScreenshotOn();
+  //} catch (_) {}
 
   try {
     await Firebase.initializeApp(
@@ -57,7 +56,7 @@ Future<void> main() async {
   await dbService.init();
 
   final cryptoService = EncryptionService(dbKey32);
-  final sessionService = SessionService();
+  final sessionManager = SessionManager();
   final localAuthService = LocalAuthService();
 
   final themeVm = ThemeViewModel();
@@ -68,7 +67,7 @@ Future<void> main() async {
     storageService: storageService,
     databaseService: dbService,
     encryptionService: cryptoService,
-    sessionService: sessionService,
+    sessionManager: sessionManager,
     localAuthService: localAuthService,
     themeViewModel: themeVm,
   ));
@@ -79,7 +78,7 @@ class SkyFitApp extends StatelessWidget {
   final StorageService storageService;
   final DatabaseService databaseService;
   final EncryptionService encryptionService;
-  final SessionService sessionService;
+  final SessionManager sessionManager;
   final LocalAuthService localAuthService;
   final ThemeViewModel themeViewModel;
 
@@ -89,7 +88,7 @@ class SkyFitApp extends StatelessWidget {
     required this.storageService,
     required this.databaseService,
     required this.encryptionService,
-    required this.sessionService,
+    required this.sessionManager,
     required this.localAuthService,
     required this.themeViewModel,
   });
@@ -106,7 +105,7 @@ class SkyFitApp extends StatelessWidget {
         Provider<EmailOtpService>(create: (_) => EmailOtpService()),
         Provider<FirebaseAuthService>(create: (_) => FirebaseAuthService()),
         Provider<FirestoreService>(create: (_) => FirestoreService()),
-        ChangeNotifierProvider<SessionService>.value(value: sessionService),
+        ChangeNotifierProvider<SessionManager>.value(value: sessionManager),
         ChangeNotifierProvider<ThemeViewModel>.value(value: themeViewModel),
 
         // ── WeatherViewModel ─────────────────────────────────────────────────
@@ -128,7 +127,7 @@ class SkyFitApp extends StatelessWidget {
             final vm = AuthViewModel(
               databaseService,
               keyStorageService,
-              sessionService,
+              sessionManager,
               ctx.read<EmailOtpService>(),
               ctx.read<FirebaseAuthService>(),
             );
@@ -166,7 +165,7 @@ class SkyFitApp extends StatelessWidget {
               }
             }
 
-            sessionService.onWarningStart = () async {
+            sessionManager.onWarningStart = () async {
               Constants.scaffoldMessengerKey.currentState
                 ?..hideCurrentSnackBar()
                 ..showSnackBar(const SnackBar(
@@ -178,13 +177,13 @@ class SkyFitApp extends StatelessWidget {
               await startVib();
             };
 
-            sessionService.onWarningDismiss = () async {
+            sessionManager.onWarningDismiss = () async {
               Constants.scaffoldMessengerKey.currentState
                   ?.hideCurrentSnackBar();
               await stopVib();
             };
 
-            sessionService.onTimeoutLock = () async {
+            sessionManager.onTimeoutLock = () async {
               await stopVib();
               Constants.scaffoldMessengerKey.currentState
                   ?.hideCurrentSnackBar();
@@ -202,7 +201,7 @@ class SkyFitApp extends StatelessWidget {
       child: Consumer<ThemeViewModel>(
         builder: (_, themeVm, __) => Listener(
           behavior: HitTestBehavior.translucent,
-          onPointerDown: (_) => sessionService.handleUserInteraction(),
+          onPointerDown: (_) => sessionManager.handleUserInteraction(),
           child: MaterialApp(
             navigatorKey: Constants.navigatorKey,
             scaffoldMessengerKey: Constants.scaffoldMessengerKey,

@@ -11,12 +11,12 @@ import '../services/email_otp_service.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/key_storage_service.dart';
-import '../services/session_service.dart';
+import '../services/session_manager.dart';
 
 class AuthViewModel extends ChangeNotifier {
   final DatabaseService _db;
   final KeyStorageService _keys;
-  final SessionService _session;
+  final SessionManager _session;
   final EmailOtpService _otpSvc;
   final FirebaseAuthService _firebase;
   final FirestoreService _firestore = FirestoreService();
@@ -63,7 +63,6 @@ class AuthViewModel extends ChangeNotifier {
 
   // ── Biometrics availability check ──────────────────────────────────────────
   Future<void> checkBiometricsAvailability() async {
-    // Biometrics not supported on web
     if (kIsWeb) {
       _biometricsAvailable = false;
       _biometricsChecked = true;
@@ -141,7 +140,6 @@ class AuthViewModel extends ChangeNotifier {
         return false;
       }
 
-      // Check both local and Firestore
       final localExists = await _db.userExists(n);
       final firestoreExists = await _firestore.userExists(n);
       if (localExists || firestoreExists) {
@@ -185,15 +183,12 @@ class AuthViewModel extends ChangeNotifier {
         weight: weight,
       );
 
-      // Save locally (skip on web)
       if (!kIsWeb) {
         await _db.createUser(user);
       }
 
-      // Always save to Firestore
       await _firestore.saveUser(user);
 
-      // Register with Firebase Auth
       try {
         await _firebase.registerWithEmail(
           email: n,
@@ -232,7 +227,6 @@ class AuthViewModel extends ChangeNotifier {
           return false;
         }
 
-        // Load user profile from Firestore
         final firestoreData = await _firestore.getUser(n);
         UserModel user;
         if (firestoreData != null) {
@@ -253,7 +247,6 @@ class AuthViewModel extends ChangeNotifier {
                 firestoreData['biometricsEnabled'] as bool? ?? false,
           );
         } else {
-          // Create basic user if Firestore doesn't have profile yet
           user = UserModel(
             email: n,
             passwordHash: [],
@@ -275,15 +268,12 @@ class AuthViewModel extends ChangeNotifier {
       // ── Mobile login — use local Hive + PBKDF2 ─────────────────────────
       UserModel? user = await _db.getUser(n);
 
-      // If not found locally, check Firestore
       if (user == null) {
         final firestoreData = await _firestore.getUser(n);
         if (firestoreData == null) {
           _error = 'User not found.';
           return false;
         }
-        // User exists in Firestore but not locally
-        // Use Firebase Auth to verify password
         try {
           await _firebase.loginWithEmail(email: n, password: password);
         } catch (e) {
@@ -308,7 +298,6 @@ class AuthViewModel extends ChangeNotifier {
         );
         await _db.createUser(user);
       } else {
-        // Verify password locally with PBKDF2
         if (!_constantTimeEquals(
             _pbkdf2Hash(password: password, salt: user.salt),
             user.passwordHash)) {
@@ -317,7 +306,6 @@ class AuthViewModel extends ChangeNotifier {
         }
       }
 
-      // Firebase Auth sign in
       try {
         await _firebase.loginWithEmail(email: n, password: password);
       } catch (e) {

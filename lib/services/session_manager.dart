@@ -2,14 +2,14 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../utils/constants.dart';
 
-class SessionService extends ChangeNotifier {
+class SessionManager extends ChangeNotifier {
   Timer? _timeoutTimer;
   Timer? _warningTimer;
 
-  bool _locked       = true;
+  bool _locked = true;
   bool _warningActive = false;
 
-  bool get isLocked       => _locked;
+  bool get isLocked => _locked;
   bool get isWarningActive => _warningActive;
 
   Future<void> Function()? onTimeoutLock;
@@ -41,7 +41,7 @@ class SessionService extends ChangeNotifier {
     _timeoutTimer?.cancel();
     _warningTimer?.cancel();
 
-    final total          = Constants.inactivityTimeoutSeconds;
+    final total = Constants.inactivityTimeoutSeconds;
     final warningAfterSec = total - Constants.sessionWarningSeconds;
 
     if (warningAfterSec > 0) {
