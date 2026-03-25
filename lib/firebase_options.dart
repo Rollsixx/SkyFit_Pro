@@ -13,6 +13,10 @@ class DefaultFirebaseOptions {
     }
   }
 
+  // ── Web Client ID (for Google Sign-In on web) ──────────────────────────────
+  static const String webClientId =
+      '725416192091-kssndjmn18gg5bm9chumh373iu1mb1r6.apps.googleusercontent.com';
+
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyDWrZWT6ytEO6ycGpvl-3njsjoeG-812cg',
     authDomain: 'skyfit-pro-635ab.firebaseapp.com',

@@ -1,9 +1,16 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../firebase_options.dart';
 
 class FirebaseAuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+
+  // ── Use web client ID on web, null on mobile (uses google-services.json) ───
+  late final GoogleSignIn _googleSignIn = GoogleSignIn(
+    clientId: kIsWeb ? DefaultFirebaseOptions.webClientId : null,
+    scopes: ['email', 'profile'],
+  );
 
   User? get currentFirebaseUser => _auth.currentUser;
 
