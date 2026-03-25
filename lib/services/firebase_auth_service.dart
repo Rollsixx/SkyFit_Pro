@@ -55,26 +55,59 @@ class FirebaseAuthService {
   // ── Google Sign-In ─────────────────────────────────────────────────────────
   Future<GoogleSignInResult> signInWithGoogle() async {
     try {
+      // ── Always fully sign out first to force account picker ───────────────
       try {
         await _googleSignIn.disconnect();
       } catch (_) {
-        await _googleSignIn.signOut();
+        try {
+          await _googleSignIn.signOut();
+        } catch (_) {}
       }
       await _auth.signOut();
 
+      // ── Attempt Google sign-in ─────────────────────────────────────────────
       final GoogleSignInAccount? googleAccount = await _googleSignIn.signIn();
-      if (googleAccount == null) return GoogleSignInResult.cancelled();
 
+      // User cancelled the picker
+      if (googleAccount == null) {
+        // ignore: avoid_print
+        print('[FirebaseAuthService] Google sign-in cancelled by user.');
+        return GoogleSignInResult.cancelled();
+      }
+
+      // ── Get auth tokens — guard against null access/idToken ───────────────
       final GoogleSignInAuthentication googleAuth =
           await googleAccount.authentication;
 
+      final accessToken = googleAuth.accessToken;
+      final idToken = googleAuth.idToken;
+
+      if (accessToken == null && idToken == null) {
+        // ignore: avoid_print
+        print('[FirebaseAuthService] Both accessToken and idToken are null. '
+            'Check that your webClientId in firebase_options.dart matches '
+            'the OAuth 2.0 client in Google Cloud Console.');
+        return GoogleSignInResult.error(
+          'Google sign-in failed: Could not retrieve authentication tokens. '
+          'Please check your OAuth client configuration.',
+        );
+      }
+
       final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
+        accessToken: accessToken,
+        idToken: idToken,
       );
 
       final userCredential = await _auth.signInWithCredential(credential);
-      final user = userCredential.user!;
+      final user = userCredential.user;
+
+      if (user == null) {
+        // ignore: avoid_print
+        print(
+            '[FirebaseAuthService] Firebase user is null after credential sign-in.');
+        return GoogleSignInResult.error(
+            'Google sign-in failed: No user returned.');
+      }
 
       // ignore: avoid_print
       print('[FirebaseAuthService] Google sign-in success: ${user.email}');
@@ -88,11 +121,12 @@ class FirebaseAuthService {
       );
     } on FirebaseAuthException catch (e) {
       // ignore: avoid_print
-      print('[FirebaseAuthService] FirebaseAuthException: ${e.code}');
+      print(
+          '[FirebaseAuthService] FirebaseAuthException: ${e.code} — ${e.message}');
       return GoogleSignInResult.error(e.message ?? 'Google sign-in failed.');
     } catch (e) {
       // ignore: avoid_print
-      print('[FirebaseAuthService] Error: $e');
+      print('[FirebaseAuthService] Unexpected error: $e');
       return GoogleSignInResult.error('Google sign-in failed: $e');
     }
   }
@@ -103,7 +137,9 @@ class FirebaseAuthService {
     try {
       await _googleSignIn.disconnect();
     } catch (_) {
-      await _googleSignIn.signOut();
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
     }
     // ignore: avoid_print
     print('[FirebaseAuthService] Signed out.');

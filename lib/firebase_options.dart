@@ -14,23 +14,25 @@ class DefaultFirebaseOptions {
   }
 
   // ── Web Client ID (for Google Sign-In on web) ──────────────────────────────
+  // FIXED: Must match the OAuth 2.0 Client ID in Google Cloud Console
+  // and the project that owns this Firebase project (messagingSenderId prefix)
   static const String webClientId =
-      '725416192091-kssndjmn18gg5bm9chumh373iu1mb1r6.apps.googleusercontent.com';
+      '705462588257-f34qgqhujhr69qusrm6fa7iea9fo1e21.apps.googleusercontent.com';
 
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyDWrZWT6ytEO6ycGpvl-3njsjoeG-812cg',
     authDomain: 'skyfit-pro-635ab.firebaseapp.com',
     projectId: 'skyfit-pro-635ab',
     storageBucket: 'skyfit-pro-635ab.firebasestorage.app',
-    messagingSenderId: '725416192091',
-    appId: '1:725416192091:web:fbadc072abc153ebe0777e',
+    messagingSenderId: '705462588257',
+    appId: '1:705462588257:web:fbadc072abc153ebe0777e',
     measurementId: 'G-W6L5NXRHWK',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCWJ1arSqHNin68qtWsk5FO8P0_ufNPGk0',
-    appId: '1:725416192091:android:542b6d2643fe6e99e0777e',
-    messagingSenderId: '725416192091',
+    appId: '1:705462588257:android:542b6d2643fe6e99e0777e',
+    messagingSenderId: '705462588257',
     projectId: 'skyfit-pro-635ab',
     storageBucket: 'skyfit-pro-635ab.appspot.com',
   );
