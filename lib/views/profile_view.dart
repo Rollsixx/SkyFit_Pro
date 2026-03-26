@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -21,15 +22,24 @@ class _ProfileViewState extends State<ProfileView>
     with SingleTickerProviderStateMixin {
   late TabController _tabs;
 
+  // ── Profile Tab Controllers ────────────────────────────────────────────────
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _bioCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
   final _jobCtrl = TextEditingController();
   final _birthdayCtrl = TextEditingController();
+
+  // ── Health Tab Controllers ─────────────────────────────────────────────────
   final _ageCtrl = TextEditingController();
   final _weightCtrl = TextEditingController();
-  bool _editMode = false;
+
+  // ── Separate edit modes for each tab ──────────────────────────────────────
+  bool _editModeProfile = false;
+  bool _editModeHealth = false;
+
+  // ── Web photo handling ─────────────────────────────────────────────────────
+  Uint8List? _webImageBytes;
 
   @override
   void initState() {
@@ -91,15 +101,16 @@ class _ProfileViewState extends State<ProfileView>
             const Text('Change Photo',
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
-            _SheetTile(
-              icon: Icons.camera_alt_rounded,
-              color: cs.primary,
-              label: 'Take Photo',
-              onTap: () async {
-                Navigator.pop(context);
-                await _pickImage(ImageSource.camera, auth);
-              },
-            ),
+            if (!kIsWeb)
+              _SheetTile(
+                icon: Icons.camera_alt_rounded,
+                color: cs.primary,
+                label: 'Take Photo',
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _pickImage(ImageSource.camera, auth);
+                },
+              ),
             _SheetTile(
               icon: Icons.photo_library_rounded,
               color: cs.secondary,
@@ -110,13 +121,15 @@ class _ProfileViewState extends State<ProfileView>
               },
             ),
             if (auth.currentUser?.localPhotoPath != null ||
-                auth.currentUser?.photoUrl != null)
+                auth.currentUser?.photoUrl != null ||
+                _webImageBytes != null)
               _SheetTile(
                 icon: Icons.delete_outline_rounded,
                 color: Colors.red,
                 label: 'Remove Photo',
                 onTap: () async {
                   Navigator.pop(context);
+                  setState(() => _webImageBytes = null);
                   await auth.removeLocalPhoto();
                 },
               ),
@@ -136,7 +149,22 @@ class _ProfileViewState extends State<ProfileView>
         imageQuality: 80,
       );
       if (picked == null) return;
-      await auth.updateLocalPhoto(picked.path);
+
+      if (kIsWeb) {
+        // ── Web: read as bytes and store in memory ─────────────────────────
+        final bytes = await picked.readAsBytes();
+        setState(() => _webImageBytes = bytes);
+        // On web we use photoUrl stored in Firestore
+        // For demo purposes show the image from memory
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Photo updated!')),
+          );
+        }
+      } else {
+        // ── Mobile: save file path ─────────────────────────────────────────
+        await auth.updateLocalPhoto(picked.path);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -144,8 +172,8 @@ class _ProfileViewState extends State<ProfileView>
     }
   }
 
-  // ── Save personal info ─────────────────────────────────────────────────────
-  Future<void> _saveInfo() async {
+  // ── Save profile info ──────────────────────────────────────────────────────
+  Future<void> _saveProfileInfo() async {
     await context.read<AuthViewModel>().updatePersonalInfo(
           displayName: _nameCtrl.text,
           phone: _phoneCtrl.text,
@@ -153,30 +181,70 @@ class _ProfileViewState extends State<ProfileView>
           location: _locationCtrl.text,
           jobTitle: _jobCtrl.text,
           birthday: _birthdayCtrl.text,
-          age: int.tryParse(_ageCtrl.text),
-          weight: double.tryParse(_weightCtrl.text),
         );
     if (!mounted) return;
-    setState(() => _editMode = false);
+    setState(() => _editModeProfile = false);
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Profile updated!')));
+        .showSnackBar(const SnackBar(content: Text('Profile info updated!')));
+  }
+
+  // ── Save health info ───────────────────────────────────────────────────────
+  Future<void> _saveHealthInfo() async {
+    final age = int.tryParse(_ageCtrl.text);
+    final weight = double.tryParse(_weightCtrl.text);
+
+    if (age == null || age < 5 || age > 120) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid age (5-120)')),
+      );
+      return;
+    }
+    if (weight == null || weight < 10 || weight > 500) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid weight (kg)')),
+      );
+      return;
+    }
+
+    await context.read<AuthViewModel>().updatePersonalInfo(
+          age: age,
+          weight: weight,
+        );
+    if (!mounted) return;
+    setState(() => _editModeHealth = false);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Health stats updated!')));
   }
 
   // ── Avatar builder ─────────────────────────────────────────────────────────
   Widget _buildAvatar(user, cs, String initials) {
     const size = 96.0;
-    if (user.localPhotoPath != null) {
+
+    // Web: show bytes image
+    if (kIsWeb && _webImageBytes != null) {
+      return CircleAvatar(
+        radius: size / 2,
+        backgroundImage: MemoryImage(_webImageBytes!),
+      );
+    }
+
+    // Mobile: show file image
+    if (!kIsWeb && user.localPhotoPath != null) {
       return CircleAvatar(
         radius: size / 2,
         backgroundImage: FileImage(File(user.localPhotoPath!)),
       );
     }
+
+    // Network photo (Google profile photo)
     if (user.photoUrl != null) {
       return CircleAvatar(
         radius: size / 2,
         backgroundImage: NetworkImage(user.photoUrl!),
       );
     }
+
+    // Default initials avatar
     return CircleAvatar(
       radius: size / 2,
       backgroundColor: cs.primary,
@@ -215,17 +283,6 @@ class _ProfileViewState extends State<ProfileView>
           ],
         ),
       ),
-      floatingActionButton: _tabs.index == 0
-          ? FloatingActionButton.extended(
-              heroTag: 'profile_edit_fab',
-              onPressed: _editMode
-                  ? _saveInfo
-                  : () => setState(() => _editMode = true),
-              icon: Icon(_editMode ? Icons.check_rounded : Icons.edit_rounded),
-              label: Text(_editMode ? 'Save' : 'Edit Profile'),
-              backgroundColor: _editMode ? Colors.green : cs.primary,
-            ).animate().scale(duration: 300.ms, curve: Curves.elasticOut)
-          : null,
       body: TabBarView(
         controller: _tabs,
         physics: const NeverScrollableScrollPhysics(),
@@ -308,7 +365,6 @@ class _ProfileViewState extends State<ProfileView>
                     borderRadius: BorderRadius.circular(16)),
                 child: Column(
                   children: [
-                    // ── Fingerprint toggle ───────────────────────────────────────
                     SwitchListTile(
                       title: const Text('Fingerprint Login'),
                       subtitle: const Text('Use fingerprint to unlock'),
@@ -322,7 +378,6 @@ class _ProfileViewState extends State<ProfileView>
                     Divider(
                         height: 1,
                         color: isDark ? Colors.white12 : Colors.black12),
-                    // ── Face ID toggle ───────────────────────────────────────────
                     SwitchListTile(
                       title: const Text('Face ID Login'),
                       subtitle: const Text('Use face recognition to unlock'),
@@ -332,7 +387,6 @@ class _ProfileViewState extends State<ProfileView>
                           ? null
                           : (v) => auth.setBiometricsEnabled(v),
                     ),
-                    // ── Info note ────────────────────────────────────────────────
                     if (user.biometricsEnabled)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -369,7 +423,35 @@ class _ProfileViewState extends State<ProfileView>
               const SizedBox(height: 20),
 
               // ── Personal Info ────────────────────────────────────────────
-              _SectionHeader(title: 'Personal Info', icon: Icons.badge_rounded),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _SectionHeader(
+                      title: 'Personal Info', icon: Icons.badge_rounded),
+                  // ── Edit/Save button for Personal Info ───────────────────
+                  TextButton.icon(
+                    onPressed: _editModeProfile
+                        ? _saveProfileInfo
+                        : () {
+                            setState(() => _editModeProfile = true);
+                          },
+                    icon: Icon(
+                      _editModeProfile
+                          ? Icons.check_rounded
+                          : Icons.edit_rounded,
+                      size: 16,
+                      color: _editModeProfile ? Colors.green : cs.primary,
+                    ),
+                    label: Text(
+                      _editModeProfile ? 'Save' : 'Edit',
+                      style: TextStyle(
+                        color: _editModeProfile ? Colors.green : cs.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               Card(
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16)),
@@ -380,40 +462,60 @@ class _ProfileViewState extends State<ProfileView>
                       label: 'Full Name',
                       icon: Icons.person_outline_rounded,
                       ctrl: _nameCtrl,
-                      enabled: _editMode,
+                      enabled: _editModeProfile,
                     ),
                     _InfoField(
                       label: 'Phone',
                       icon: Icons.phone_outlined,
                       ctrl: _phoneCtrl,
-                      enabled: _editMode,
+                      enabled: _editModeProfile,
                       type: TextInputType.phone,
                     ),
                     _InfoField(
                       label: 'Bio',
                       icon: Icons.info_outline_rounded,
                       ctrl: _bioCtrl,
-                      enabled: _editMode,
+                      enabled: _editModeProfile,
                       maxLines: 3,
                     ),
                     _InfoField(
                       label: 'Location',
                       icon: Icons.location_on_outlined,
                       ctrl: _locationCtrl,
-                      enabled: _editMode,
+                      enabled: _editModeProfile,
                     ),
                     _InfoField(
                       label: 'Job Title',
                       icon: Icons.work_outline_rounded,
                       ctrl: _jobCtrl,
-                      enabled: _editMode,
+                      enabled: _editModeProfile,
                     ),
                     _InfoField(
                       label: 'Birthday',
                       icon: Icons.cake_outlined,
                       ctrl: _birthdayCtrl,
-                      enabled: _editMode,
+                      enabled: _editModeProfile,
                     ),
+                    // ── Cancel button ────────────────────────────────────
+                    if (_editModeProfile)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              setState(() => _editModeProfile = false);
+                              _populateFields();
+                            },
+                            icon: const Icon(Icons.close_rounded, size: 16),
+                            label: const Text('Cancel'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.grey,
+                              side: const BorderSide(color: Colors.grey),
+                            ),
+                          ),
+                        ),
+                      ),
                   ]),
                 ),
               ),
@@ -445,10 +547,40 @@ class _ProfileViewState extends State<ProfileView>
           ListView(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
             children: [
-              // BMI Card
-              _HealthCard(
-                title: 'Body Stats',
-                icon: Icons.monitor_weight_outlined,
+              // ── Body Stats ───────────────────────────────────────────────
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _SectionHeader(
+                      title: 'Body Stats', icon: Icons.monitor_weight_outlined),
+                  // ── Edit/Save button for Health ──────────────────────────
+                  TextButton.icon(
+                    onPressed: _editModeHealth
+                        ? _saveHealthInfo
+                        : () {
+                            setState(() => _editModeHealth = true);
+                          },
+                    icon: Icon(
+                      _editModeHealth
+                          ? Icons.check_rounded
+                          : Icons.edit_rounded,
+                      size: 16,
+                      color: _editModeHealth ? Colors.green : cs.primary,
+                    ),
+                    label: Text(
+                      _editModeHealth ? 'Save' : 'Edit',
+                      style: TextStyle(
+                        color: _editModeHealth ? Colors.green : cs.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(children: [
@@ -458,7 +590,7 @@ class _ProfileViewState extends State<ProfileView>
                           label: 'Age',
                           icon: Icons.cake_outlined,
                           ctrl: _ageCtrl,
-                          enabled: _editMode,
+                          enabled: _editModeHealth,
                           type: TextInputType.number,
                         ),
                       ),
@@ -468,12 +600,34 @@ class _ProfileViewState extends State<ProfileView>
                           label: 'Weight (kg)',
                           icon: Icons.monitor_weight_outlined,
                           ctrl: _weightCtrl,
-                          enabled: _editMode,
+                          enabled: _editModeHealth,
                           type: const TextInputType.numberWithOptions(
                               decimal: true),
                         ),
                       ),
                     ]),
+
+                    // ── Cancel button ────────────────────────────────────
+                    if (_editModeHealth)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              setState(() => _editModeHealth = false);
+                              _populateFields();
+                            },
+                            icon: const Icon(Icons.close_rounded, size: 16),
+                            label: const Text('Cancel'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.grey,
+                              side: const BorderSide(color: Colors.grey),
+                            ),
+                          ),
+                        ),
+                      ),
+
                     if (user.age != null && user.weight != null) ...[
                       const SizedBox(height: 16),
                       _BmiWidget(age: user.age!, weight: user.weight!),
@@ -484,57 +638,57 @@ class _ProfileViewState extends State<ProfileView>
 
               const SizedBox(height: 16),
 
-              // Age group card
+              // ── Age group card ───────────────────────────────────────────
               if (user.age != null)
-                _HealthCard(
-                  title: 'Age Group',
-                  icon: Icons.people_outline_rounded,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(children: [
-                      Icon(Icons.accessibility_new_rounded,
-                          color: cs.primary, size: 36),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            user.age! < 18
-                                ? 'Youth (< 18)'
-                                : user.age! < 50
-                                    ? 'Adult (18–49)'
-                                    : 'Senior (50+)',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: cs.primary),
-                          ),
-                          Text(
-                            user.age! < 50
-                                ? 'High-intensity activities recommended'
-                                : 'Low-impact activities recommended',
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ]),
-                  ),
-                ),
-
-              const SizedBox(height: 16),
-
-              // Edit reminder
-              if (!_editMode)
-                Center(
-                  child: TextButton.icon(
-                    onPressed: () {
-                      _tabs.animateTo(0);
-                      setState(() => _editMode = true);
-                    },
-                    icon: const Icon(Icons.edit_rounded),
-                    label: const Text('Edit health stats in Profile tab'),
-                  ),
+                Card(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                          child: Row(children: [
+                            Icon(Icons.people_outline_rounded,
+                                color: cs.primary, size: 20),
+                            const SizedBox(width: 8),
+                            const Text('Age Group',
+                                style: TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.w700)),
+                          ]),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(children: [
+                            Icon(Icons.accessibility_new_rounded,
+                                color: cs.primary, size: 36),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user.age! < 18
+                                      ? 'Youth (< 18)'
+                                      : user.age! < 50
+                                          ? 'Adult (18–49)'
+                                          : 'Senior (50+)',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      color: cs.primary),
+                                ),
+                                Text(
+                                  user.age! < 50
+                                      ? 'High-intensity activities recommended'
+                                      : 'Low-impact activities recommended',
+                                  style: const TextStyle(
+                                      fontSize: 12, color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ]),
+                        ),
+                      ]),
                 ),
             ],
           ),
@@ -552,7 +706,6 @@ class _BmiWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     String category;
     Color color;
     if (weight < 50) {
@@ -589,36 +742,6 @@ class _BmiWidget extends StatelessWidget {
           Text('${weight.toStringAsFixed(1)} kg',
               style: TextStyle(fontSize: 12, color: color)),
         ]),
-      ]),
-    );
-  }
-}
-
-// ── Health Card ───────────────────────────────────────────────────────────────
-class _HealthCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Widget child;
-  const _HealthCard(
-      {required this.title, required this.icon, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-          child: Row(children: [
-            Icon(icon, color: cs.primary, size: 20),
-            const SizedBox(width: 8),
-            Text(title,
-                style:
-                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-          ]),
-        ),
-        child,
       ]),
     );
   }

@@ -271,6 +271,11 @@ class AuthViewModel extends ChangeNotifier {
             weight: (firestoreData['weight'] as num?)?.toDouble(),
             biometricsEnabled:
                 firestoreData['biometricsEnabled'] as bool? ?? false,
+            phone: firestoreData['phone'] as String?,
+            bio: firestoreData['bio'] as String?,
+            location: firestoreData['location'] as String?,
+            jobTitle: firestoreData['jobTitle'] as String?,
+            birthday: firestoreData['birthday'] as String?,
           );
         } else {
           user = UserModel(
@@ -408,18 +413,47 @@ class AuthViewModel extends ChangeNotifier {
 
       UserModel? user = kIsWeb ? null : await _db.getUser(email);
       if (user == null) {
-        user = UserModel(
-          email: email,
-          passwordHash: [],
-          salt: [],
-          hasLoggedInOnce: true,
-          displayName: pending.displayName,
-          photoUrl: pending.photoUrl,
-          isGoogleUser: true,
-          memberSince: DateTime.now(),
-        );
-        if (!kIsWeb) await _db.createUser(user);
-        await _firestore.saveUser(user);
+        // Try loading from Firestore first
+        final firestoreData = await _firestore.getUser(email);
+        if (firestoreData != null) {
+          user = UserModel(
+            email: email,
+            passwordHash: [],
+            salt: [],
+            hasLoggedInOnce: true,
+            displayName:
+                firestoreData['displayName'] as String? ?? pending.displayName,
+            photoUrl: firestoreData['photoUrl'] as String? ?? pending.photoUrl,
+            isGoogleUser: true,
+            memberSince: firestoreData['memberSince'] != null
+                ? DateTime.tryParse(firestoreData['memberSince'])
+                : DateTime.now(),
+            age: firestoreData['age'] as int?,
+            weight: (firestoreData['weight'] as num?)?.toDouble(),
+            biometricsEnabled:
+                firestoreData['biometricsEnabled'] as bool? ?? false,
+            phone: firestoreData['phone'] as String?,
+            bio: firestoreData['bio'] as String?,
+            location: firestoreData['location'] as String?,
+            jobTitle: firestoreData['jobTitle'] as String?,
+            birthday: firestoreData['birthday'] as String?,
+          );
+          if (!kIsWeb) await _db.createUser(user);
+          await _firestore.saveUser(user);
+        } else {
+          user = UserModel(
+            email: email,
+            passwordHash: [],
+            salt: [],
+            hasLoggedInOnce: true,
+            displayName: pending.displayName,
+            photoUrl: pending.photoUrl,
+            isGoogleUser: true,
+            memberSince: DateTime.now(),
+          );
+          if (!kIsWeb) await _db.createUser(user);
+          await _firestore.saveUser(user);
+        }
       } else {
         user.displayName = pending.displayName ?? user.displayName;
         user.photoUrl = pending.photoUrl ?? user.photoUrl;
@@ -585,6 +619,8 @@ class AuthViewModel extends ChangeNotifier {
     await _firestore.saveUser(user);
     _currentUser = user;
     notifyListeners();
+    // ignore: avoid_print
+    print('[AuthViewModel] Personal info updated for ${user.email}');
   }
 
   Future<void> updateLocalPhoto(String path) async {
