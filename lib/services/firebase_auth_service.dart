@@ -6,9 +6,9 @@ import '../firebase_options.dart';
 class FirebaseAuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // ── Use web client ID on web, null on mobile (uses google-services.json) ───
+  // ── On web: use serverClientId, on mobile: use google-services.json ────────
   late final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: kIsWeb ? DefaultFirebaseOptions.webClientId : null,
+    serverClientId: kIsWeb ? DefaultFirebaseOptions.webClientId : null,
     scopes: ['email', 'profile'],
   );
 
@@ -55,59 +55,49 @@ class FirebaseAuthService {
   // ── Google Sign-In ─────────────────────────────────────────────────────────
   Future<GoogleSignInResult> signInWithGoogle() async {
     try {
-      // ── Always fully sign out first to force account picker ───────────────
-      try {
-        await _googleSignIn.disconnect();
-      } catch (_) {
-        try {
-          await _googleSignIn.signOut();
-        } catch (_) {}
-      }
-      await _auth.signOut();
+      // ── Web: use Firebase Auth popup directly ──────────────────────────────
+      if (kIsWeb) {
+        final googleProvider = GoogleAuthProvider();
+        googleProvider.addScope('email');
+        googleProvider.addScope('profile');
 
-      // ── Attempt Google sign-in ─────────────────────────────────────────────
-      final GoogleSignInAccount? googleAccount = await _googleSignIn.signIn();
+        final userCredential = await _auth.signInWithPopup(googleProvider);
+        final user = userCredential.user!;
 
-      // User cancelled the picker
-      if (googleAccount == null) {
         // ignore: avoid_print
-        print('[FirebaseAuthService] Google sign-in cancelled by user.');
-        return GoogleSignInResult.cancelled();
-      }
+        print(
+            '[FirebaseAuthService] Google web sign-in success: ${user.email}');
 
-      // ── Get auth tokens — guard against null access/idToken ───────────────
-      final GoogleSignInAuthentication googleAuth =
-          await googleAccount.authentication;
-
-      final accessToken = googleAuth.accessToken;
-      final idToken = googleAuth.idToken;
-
-      if (accessToken == null && idToken == null) {
-        // ignore: avoid_print
-        print('[FirebaseAuthService] Both accessToken and idToken are null. '
-            'Check that your webClientId in firebase_options.dart matches '
-            'the OAuth 2.0 client in Google Cloud Console.');
-        return GoogleSignInResult.error(
-          'Google sign-in failed: Could not retrieve authentication tokens. '
-          'Please check your OAuth client configuration.',
+        return GoogleSignInResult.success(
+          firebaseUser: user,
+          displayName: user.displayName,
+          email: user.email ?? '',
+          photoUrl: user.photoURL,
+          isNewUser: userCredential.additionalUserInfo?.isNewUser ?? false,
         );
       }
 
+      // ── Mobile: use GoogleSignIn package ───────────────────────────────────
+      try {
+        await _googleSignIn.disconnect();
+      } catch (_) {
+        await _googleSignIn.signOut();
+      }
+      await _auth.signOut();
+
+      final GoogleSignInAccount? googleAccount = await _googleSignIn.signIn();
+      if (googleAccount == null) return GoogleSignInResult.cancelled();
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleAccount.authentication;
+
       final credential = GoogleAuthProvider.credential(
-        accessToken: accessToken,
-        idToken: idToken,
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
       );
 
       final userCredential = await _auth.signInWithCredential(credential);
-      final user = userCredential.user;
-
-      if (user == null) {
-        // ignore: avoid_print
-        print(
-            '[FirebaseAuthService] Firebase user is null after credential sign-in.');
-        return GoogleSignInResult.error(
-            'Google sign-in failed: No user returned.');
-      }
+      final user = userCredential.user!;
 
       // ignore: avoid_print
       print('[FirebaseAuthService] Google sign-in success: ${user.email}');
@@ -121,12 +111,11 @@ class FirebaseAuthService {
       );
     } on FirebaseAuthException catch (e) {
       // ignore: avoid_print
-      print(
-          '[FirebaseAuthService] FirebaseAuthException: ${e.code} — ${e.message}');
+      print('[FirebaseAuthService] FirebaseAuthException: ${e.code}');
       return GoogleSignInResult.error(e.message ?? 'Google sign-in failed.');
     } catch (e) {
       // ignore: avoid_print
-      print('[FirebaseAuthService] Unexpected error: $e');
+      print('[FirebaseAuthService] Error: $e');
       return GoogleSignInResult.error('Google sign-in failed: $e');
     }
   }
@@ -134,12 +123,12 @@ class FirebaseAuthService {
   // ── Sign Out ───────────────────────────────────────────────────────────────
   Future<void> signOut() async {
     await _auth.signOut();
-    try {
-      await _googleSignIn.disconnect();
-    } catch (_) {
+    if (!kIsWeb) {
       try {
+        await _googleSignIn.disconnect();
+      } catch (_) {
         await _googleSignIn.signOut();
-      } catch (_) {}
+      }
     }
     // ignore: avoid_print
     print('[FirebaseAuthService] Signed out.');
