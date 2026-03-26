@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -60,6 +61,19 @@ class _ProfileViewState extends State<ProfileView>
     _birthdayCtrl.text = u.birthday ?? '';
     _ageCtrl.text = u.age?.toString() ?? '';
     _weightCtrl.text = u.weight?.toString() ?? '';
+
+    // ── FIX 5: On web, restore photo from saved base64 photoUrl ───────────
+    if (kIsWeb) {
+      final photoUrl = u.photoUrl;
+      if (photoUrl != null && photoUrl.startsWith('data:')) {
+        try {
+          final base64Data = photoUrl.split(',').last;
+          _webImageBytes = base64Decode(base64Data);
+        } catch (_) {
+          _webImageBytes = null;
+        }
+      }
+    }
   }
 
   @override
@@ -151,11 +165,14 @@ class _ProfileViewState extends State<ProfileView>
       if (picked == null) return;
 
       if (kIsWeb) {
-        // ── Web: read as bytes and store in memory ─────────────────────────
+        // ── FIX 5: Web — encode as base64 and persist to Firestore ────────
         final bytes = await picked.readAsBytes();
         setState(() => _webImageBytes = bytes);
-        // On web we use photoUrl stored in Firestore
-        // For demo purposes show the image from memory
+
+        // Save as base64 data URL so it persists across sessions
+        final base64Str = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+        await auth.updatePhotoUrl(base64Str);
+
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Photo updated!')),
@@ -216,16 +233,38 @@ class _ProfileViewState extends State<ProfileView>
         .showSnackBar(const SnackBar(content: Text('Health stats updated!')));
   }
 
-  // ── Avatar builder ─────────────────────────────────────────────────────────
+  // ── FIX 5: Avatar builder — web shows base64, mobile shows file ───────────
   Widget _buildAvatar(user, cs, String initials) {
     const size = 96.0;
 
-    // Web: show bytes image
-    if (kIsWeb && _webImageBytes != null) {
-      return CircleAvatar(
-        radius: size / 2,
-        backgroundImage: MemoryImage(_webImageBytes!),
-      );
+    // Web: show from memory first (newly picked), then fall back to saved photoUrl
+    if (kIsWeb) {
+      if (_webImageBytes != null) {
+        return CircleAvatar(
+          radius: size / 2,
+          backgroundImage: MemoryImage(_webImageBytes!),
+        );
+      }
+      // Restore from saved base64 photoUrl
+      if (user.photoUrl != null && user.photoUrl!.startsWith('data:')) {
+        try {
+          final base64Data = user.photoUrl!.split(',').last;
+          final bytes = base64Decode(base64Data);
+          return CircleAvatar(
+            radius: size / 2,
+            backgroundImage: MemoryImage(bytes),
+          );
+        } catch (_) {
+          // Fall through to default
+        }
+      }
+      // Google profile photo (network URL)
+      if (user.photoUrl != null) {
+        return CircleAvatar(
+          radius: size / 2,
+          backgroundImage: NetworkImage(user.photoUrl!),
+        );
+      }
     }
 
     // Mobile: show file image
@@ -236,7 +275,7 @@ class _ProfileViewState extends State<ProfileView>
       );
     }
 
-    // Network photo (Google profile photo)
+    // Network photo (Google profile photo on mobile)
     if (user.photoUrl != null) {
       return CircleAvatar(
         radius: size / 2,
@@ -428,7 +467,6 @@ class _ProfileViewState extends State<ProfileView>
                 children: [
                   _SectionHeader(
                       title: 'Personal Info', icon: Icons.badge_rounded),
-                  // ── Edit/Save button for Personal Info ───────────────────
                   TextButton.icon(
                     onPressed: _editModeProfile
                         ? _saveProfileInfo
@@ -496,7 +534,6 @@ class _ProfileViewState extends State<ProfileView>
                       ctrl: _birthdayCtrl,
                       enabled: _editModeProfile,
                     ),
-                    // ── Cancel button ────────────────────────────────────
                     if (_editModeProfile)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
@@ -553,7 +590,6 @@ class _ProfileViewState extends State<ProfileView>
                 children: [
                   _SectionHeader(
                       title: 'Body Stats', icon: Icons.monitor_weight_outlined),
-                  // ── Edit/Save button for Health ──────────────────────────
                   TextButton.icon(
                     onPressed: _editModeHealth
                         ? _saveHealthInfo
@@ -606,8 +642,6 @@ class _ProfileViewState extends State<ProfileView>
                         ),
                       ),
                     ]),
-
-                    // ── Cancel button ────────────────────────────────────
                     if (_editModeHealth)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
@@ -627,7 +661,6 @@ class _ProfileViewState extends State<ProfileView>
                           ),
                         ),
                       ),
-
                     if (user.age != null && user.weight != null) ...[
                       const SizedBox(height: 16),
                       _BmiWidget(age: user.age!, weight: user.weight!),

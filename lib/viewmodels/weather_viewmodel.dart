@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
-
 import '../models/activity_model.dart';
 import '../models/user_model.dart';
 import '../models/weather_model.dart';
@@ -25,17 +24,14 @@ class WeatherViewModel extends ChangeNotifier {
     _setBusy(true);
     _error = null;
     try {
-      // Step 1 — Get location
       final position = await _determinePosition();
 
-      // Step 2 — Fetch weather via repository (API or cache)
       _weather = await _repo.getWeather(
         lat: position.latitude,
         lon: position.longitude,
         forceRefresh: forceRefresh,
       );
 
-      // Step 3 — Compute activity suggestion
       _activity = ActivitySuggestionEngine.suggest(
         weatherCondition: _weather!.condition,
         temperature: _weather!.temperature,
@@ -56,6 +52,20 @@ class WeatherViewModel extends ChangeNotifier {
   // ── Force refresh ──────────────────────────────────────────────────────────
   Future<void> refresh(UserModel? user) async {
     await fetchWeather(user, forceRefresh: true);
+  }
+
+  // ── FIX 4: Update activity when user profile (age/weight) changes ──────────
+  void updateActivity(UserModel? user) {
+    if (_weather == null) return;
+    _activity = ActivitySuggestionEngine.suggest(
+      weatherCondition: _weather!.condition,
+      temperature: _weather!.temperature,
+      age: user?.age ?? 25,
+      weight: user?.weight ?? 70.0,
+    );
+    notifyListeners();
+    // ignore: avoid_print
+    print('[WeatherViewModel] Activity updated for age: ${user?.age}');
   }
 
   // ── Location helper ────────────────────────────────────────────────────────

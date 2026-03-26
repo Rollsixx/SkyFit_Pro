@@ -24,6 +24,17 @@ class _HomeViewState extends State<HomeView> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadWeather());
   }
 
+  // ── FIX 4: Refresh activity suggestion whenever user profile changes ────────
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final user = context.read<AuthViewModel>().currentUser;
+    final weatherVm = context.read<WeatherViewModel>();
+    if (weatherVm.weather != null && user != null) {
+      weatherVm.updateActivity(user);
+    }
+  }
+
   Future<void> _loadWeather() async {
     final user = context.read<AuthViewModel>().currentUser;
     final weatherVm = context.read<WeatherViewModel>();
@@ -456,11 +467,9 @@ class _VideoPreviewTile extends StatelessWidget {
   String? _videoId() {
     final uri = Uri.tryParse(videoUrl);
     if (uri == null) return null;
-    // watch?v=VIDEO_ID format
     if (uri.queryParameters.containsKey('v')) {
       return uri.queryParameters['v'];
     }
-    // embed/VIDEO_ID format
     final segments = uri.pathSegments;
     final idx = segments.indexOf('embed');
     if (idx != -1 && idx + 1 < segments.length) {
@@ -474,13 +483,11 @@ class _VideoPreviewTile extends StatelessWidget {
       final uri = Uri.tryParse(videoUrl);
       if (uri == null) return;
 
-      // Try external app first (YouTube app)
       final launched = await launchUrl(
         uri,
         mode: LaunchMode.externalApplication,
       );
 
-      // If external fails, try in-app browser
       if (!launched) {
         await launchUrl(
           uri,
@@ -539,7 +546,7 @@ class _VideoPreviewTile extends StatelessWidget {
                 Container(
                   width: 32,
                   height: 32,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.black54,
                     shape: BoxShape.circle,
                   ),

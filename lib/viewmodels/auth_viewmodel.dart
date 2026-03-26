@@ -64,13 +64,6 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   // ── Biometrics availability check ──────────────────────────────────────────
-  // Works on ALL devices:
-  // - Samsung (fingerprint + face)
-  // - iPhone (Face ID + Touch ID)
-  // - Xiaomi/POCO (fingerprint + face unlock)
-  // - Pixel (fingerprint)
-  // - OnePlus (fingerprint + face)
-  // - Huawei (fingerprint + face)
   Future<void> checkBiometricsAvailability() async {
     if (kIsWeb) {
       _biometricsAvailable = false;
@@ -91,13 +84,7 @@ class AuthViewModel extends ChangeNotifier {
       print('[AuthViewModel] availableBiometrics: $available');
 
       _availableBiometricTypes = available;
-
-      // ── Universal biometric detection ──────────────────────────────────────
-      // Strategy: if device is supported, it can authenticate
-      // This covers ALL brands including Xiaomi/POCO face unlock
-      // which doesn't appear in getAvailableBiometrics() but still works
       _biometricsAvailable = supported;
-
       _biometricInfo =
           'supported=$supported canCheck=$canCheck available=$available';
     } catch (e) {
@@ -526,8 +513,6 @@ class AuthViewModel extends ChangeNotifier {
       final ok = await _localAuth.authenticate(
         localizedReason: 'Unlock SkyFit Pro',
         options: const AuthenticationOptions(
-          // biometricOnly: false allows face unlock on ALL devices
-          // including Xiaomi/POCO that register face as device credential
           biometricOnly: false,
           stickyAuth: true,
           sensitiveTransaction: true,
@@ -589,6 +574,7 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── FIX 1: updatePersonalInfo saves to Firestore and notifies ──────────────
   Future<void> updatePersonalInfo({
     String? displayName,
     String? phone,
@@ -623,6 +609,19 @@ class AuthViewModel extends ChangeNotifier {
     print('[AuthViewModel] Personal info updated for ${user.email}');
   }
 
+  // ── FIX 5: updatePhotoUrl persists photo to Firestore on web ──────────────
+  Future<void> updatePhotoUrl(String url) async {
+    final user = _currentUser;
+    if (user == null) return;
+    user.photoUrl = url;
+    if (!kIsWeb) await _db.updateUser(user);
+    await _firestore.saveUser(user);
+    _currentUser = user;
+    notifyListeners();
+    // ignore: avoid_print
+    print('[AuthViewModel] Photo URL updated for ${user.email}');
+  }
+
   Future<void> updateLocalPhoto(String path) async {
     final user = _currentUser;
     if (user == null) return;
@@ -637,6 +636,7 @@ class AuthViewModel extends ChangeNotifier {
     final user = _currentUser;
     if (user == null) return;
     user.localPhotoPath = null;
+    user.photoUrl = null;
     if (!kIsWeb) await _db.updateUser(user);
     await _firestore.saveUser(user);
     _currentUser = user;
