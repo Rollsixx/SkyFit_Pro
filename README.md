@@ -143,7 +143,6 @@ docker run -p 8080:8080 skyfit-pro
 - No hardcoded encryption keys
 - Session auto-lock after 5 minutes inactivity
 - Biometric unlock (after first password login)
-- Screenshot prevention enabled
 - PBKDF2 password hashing (100,000 iterations)
 
 ---
