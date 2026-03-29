@@ -158,8 +158,3 @@ docker run -p 8080:8080 skyfit-pro
 | Thunderstorm | Any | Any | Indoor Rest & Stretching |
 
 ---
-
-## Security Disclaimer
-This is a laboratory exercise demonstrating correct MVVM separation
-and baseline secure patterns. For production use, add device integrity
-checks, rate limiting, and key rotation.
